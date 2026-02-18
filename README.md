@@ -1,6 +1,6 @@
 # 5-Level Governance Plugin
 
-This folder is a Claude-compatible governance plugin built from `claude-plugin.spec.md`.
+This folder is a Claude-compatible governance plugin.
 
 It implements the LAW-PATH-TRACE-GATE-REALITY discipline as a strict artifact workflow.
 
