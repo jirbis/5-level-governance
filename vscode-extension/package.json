@@ -1,0 +1,100 @@
+{
+  "name": "5-level-governance",
+  "displayName": "5-Level Governance",
+  "description": "Add LAW-PATH-TRACE-GATE-REALITY governance to any workspace",
+  "version": "0.1.0",
+  "publisher": "protocolware",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:LAW.md"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "governance.init",
+        "title": "Initialize Governance",
+        "category": "Governance"
+      },
+      {
+        "command": "governance.gate1",
+        "title": "Run Gate 1 (PATH Admissibility)",
+        "category": "Governance"
+      },
+      {
+        "command": "governance.gate2",
+        "title": "Run Gate 2 (REALITY Admissibility)",
+        "category": "Governance"
+      },
+      {
+        "command": "governance.gateAll",
+        "title": "Run All Gates",
+        "category": "Governance"
+      },
+      {
+        "command": "governance.appendTrace",
+        "title": "Append TRACE Entry",
+        "category": "Governance"
+      },
+      {
+        "command": "governance.updateReality",
+        "title": "Update REALITY",
+        "category": "Governance"
+      },
+      {
+        "command": "governance.openFile",
+        "title": "Open Governance File",
+        "category": "Governance"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "governance",
+          "title": "Governance",
+          "icon": "resources/governance.svg"
+        }
+      ]
+    },
+    "views": {
+      "governance": [
+        {
+          "id": "governanceStatus",
+          "name": "Status"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "governance.gateAll",
+          "when": "view == governanceStatus",
+          "group": "navigation"
+        },
+        {
+          "command": "governance.init",
+          "when": "view == governanceStatus"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "vsce package",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  }
+}
