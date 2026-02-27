@@ -12,7 +12,14 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:LAW.md"
+    "workspaceContains:LAW.md",
+    "onCommand:governance.init",
+    "onCommand:governance.gate1",
+    "onCommand:governance.gate2",
+    "onCommand:governance.gateAll",
+    "onCommand:governance.appendTrace",
+    "onCommand:governance.updateReality",
+    "onCommand:governance.openFile"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -85,6 +92,7 @@
     }
   },
   "scripts": {
+    "build": "npm run compile",
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "package": "vsce package",
