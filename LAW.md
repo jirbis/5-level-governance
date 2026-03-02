@@ -1,5 +1,12 @@
 # LAW
 
+## How LAW Can Be Changed
+Changes to LAW are allowed only when all conditions below are met:
+1. A Gate failure or structural limitation is recorded in `TRACE.md`.
+2. A minimal amendment proposal is written explicitly in `LAW.md`.
+3. Explicit approval is recorded in `TRACE.md`.
+4. Gate 1 and Gate 2 pass after the amendment.
+
 ## Purpose
 Protect doctrinal integrity while enabling disciplined execution.
 
@@ -13,7 +20,7 @@ Protect doctrinal integrity while enabling disciplined execution.
 
 ## Forbidden
 - Contradicting Canon or constraints in this file.
-- Introducing uncodified architectural patterns during execution.
+- Introducing unapproved architectural patterns during execution.
 - Treating chat memory as authoritative state.
 - Rewriting prior TRACE history.
 
@@ -24,8 +31,3 @@ Protect doctrinal integrity while enabling disciplined execution.
 - GATE enforces admissibility.
 - REALITY is the artifact truth.
 
-## Amendment Rule
-Changes to LAW require:
-1. A recorded Gate failure or structural limitation.
-2. A proposed amendment.
-3. Explicit approval recorded in `TRACE.md`.
