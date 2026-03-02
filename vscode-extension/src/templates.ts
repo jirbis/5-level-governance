@@ -10,7 +10,6 @@ export const GOVERNANCE_FILES = [
   "GATE.md",
   "REALITY.md",
   "TRACE.md",
-  "CODIFY.md",
 ] as const;
 
 export type GovernanceFile = (typeof GOVERNANCE_FILES)[number];
@@ -29,8 +28,6 @@ export function getTemplate(file: GovernanceFile, vars: TemplateVars): string {
       return realityTemplate(vars);
     case "TRACE.md":
       return traceTemplate(vars);
-    case "CODIFY.md":
-      return codifyTemplate();
   }
 }
 
@@ -50,7 +47,6 @@ You are an execution agent operating under LAW-PATH-TRACE-GATE-REALITY.
 3. \`GATE.md\`
 4. \`REALITY.md\`
 5. \`TRACE.md\`
-6. \`CODIFY.md\`
 
 If any required file is missing, create it from template and record in \`TRACE.md\` before continuing.
 
@@ -76,16 +72,12 @@ If any required file is missing, create it from template and record in \`TRACE.m
    Log what actually changed in \`TRACE.md\` (files, outcomes, deviations).
 7. **Gate 2 (Reality Admissibility)**
    Verify REALITY conforms to PATH and LAW.
-8. **Codify**
-   Apply \`CODIFY.md\` to decide whether learning updates PATH, LAW, or agent instruction.
-
 ## Output Contract For Every Run
 - \`result\`: PASS or FAIL
 - \`executed_step\`: exact PATH step id
 - \`files_changed\`: explicit list
 - \`gate_1\`: PASS/FAIL with reason
 - \`gate_2\`: PASS/FAIL with reason
-- \`codify_action\`: NONE/PATH/LAW/AGENT-INSTRUCTION
 - \`next_allowed_step\`: exact id or STOP
 
 Stop is valid.
@@ -94,6 +86,13 @@ Stop is valid.
 
 function lawTemplate(): string {
   return `# LAW
+
+## How LAW Can Be Changed
+Changes to LAW are allowed only when all conditions below are met:
+1. A Gate failure or structural limitation is recorded in `TRACE.md`.
+2. A minimal amendment proposal is written explicitly in `LAW.md`.
+3. Explicit approval is recorded in `TRACE.md`.
+4. Gate 1 and Gate 2 pass after the amendment.
 
 ## Purpose
 Protect doctrinal integrity while enabling disciplined execution.
@@ -108,7 +107,7 @@ Protect doctrinal integrity while enabling disciplined execution.
 
 ## Forbidden Actions
 - Contradicting Canon or constraints.
-- Introducing uncodified architectural patterns during execution.
+- Introducing unapproved architectural patterns during execution.
 - Treating chat memory as authoritative state.
 - Rewriting prior TRACE history.
 
@@ -119,11 +118,6 @@ Protect doctrinal integrity while enabling disciplined execution.
 - GATE enforces admissibility.
 - REALITY is the artifact truth.
 
-## Amendment Rule
-Changes to LAW require:
-1. A recorded gate failure that motivates the change.
-2. A proposed amendment in minimal form.
-3. Explicit approval recorded in \`TRACE.md\`.
 `;
 }
 
@@ -144,7 +138,6 @@ Define the admissible implementation route under LAW.
 - [ ] \`P3\` Execute smallest admissible change set.
 - [ ] \`P4\` Update REALITY and TRACE.
 - [ ] \`P5\` Run Gate 2 on resulting state.
-- [ ] \`P6\` Apply CODIFY decision.
 
 ## Current Pointer
 - \`active_step\`: \`P1\`
@@ -220,7 +213,6 @@ function realityTemplate(vars: TemplateVars): string {
 - \`GATE.md\`
 - \`REALITY.md\`
 - \`TRACE.md\`
-- \`CODIFY.md\`
 
 ## Open Risks
 - PATH values still contain placeholders and must be set before operational use.
@@ -240,37 +232,6 @@ function traceTemplate(vars: TemplateVars): string {
 
 ## Entries
 
-- ${vars.date} — INIT: Scaffolded 5-level-governance files into workspace. Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, TRACE.md, CODIFY.md; gate_1=PASS (structure aligns with LAW), gate_2=PASS (REALITY matches created files).
-`;
-}
-
-function codifyTemplate(): string {
-  return `# CODIFY
-
-## Purpose
-Convert learning into stable rules without doctrine drift.
-
-## Decision Matrix
-- Update \`PATH.md\` when learning is local to current task flow.
-- Update \`LAW.md\` when learning changes architectural doctrine.
-- Update \`CLAUDE.md\` when learning is operational behavior for the agent.
-
-## Codify Procedure
-1. Identify observed issue from TRACE.
-2. Classify issue type: \`LOCAL\`, \`ARCHITECTURAL\`, \`OPERATIONAL\`.
-3. Propose minimal rule change in the matching file.
-4. Re-run Gate 1 and Gate 2.
-5. Append codify result to TRACE.
-
-## Constraints
-- Do not patch LAW for convenience.
-- Do not skip TRACE evidence.
-- Do not codify speculative patterns without repeated evidence.
-
-## Codify Output Format
-- \`type\`: LOCAL | ARCHITECTURAL | OPERATIONAL
-- \`target_file\`: PATH.md | LAW.md | CLAUDE.md
-- \`change_summary\`: one sentence
-- \`gate_status_after_change\`: Gate1=<PASS/FAIL>, Gate2=<PASS/FAIL>
+- ${vars.date} — INIT: Scaffolded 5-level-governance files into workspace. Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, TRACE.md; gate_1=PASS (structure aligns with LAW), gate_2=PASS (REALITY matches created files).
 `;
 }
