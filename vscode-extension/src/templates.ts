@@ -1,6 +1,9 @@
 export interface TemplateVars {
   workspaceName: string;
   date: string;
+  projectGoal?: string;
+  outOfScope?: string;
+  projectDescription?: string;
 }
 
 export const GOVERNANCE_FILES = [
@@ -135,8 +138,8 @@ Define the admissible implementation route under LAW.
 
 ## Active Scope
 - Workspace: \`${vars.workspaceName}\`
-- Goal: \`<set concrete goal>\`
-- Out of scope: \`<set explicit exclusions>\`
+- Goal: \`${vars.projectGoal ?? '<set concrete goal>'}\`
+- Out of scope: \`${vars.outOfScope ?? '<set explicit exclusions>'}\`
 
 ## Step List (Deterministic Order)
 - [ ] \`P1\` Define/confirm goal and constraints.
@@ -223,10 +226,10 @@ function realityTemplate(vars: TemplateVars): string {
 - \`CODIFY.md\`
 
 ## Open Risks
-- PATH values still contain placeholders and must be set before operational use.
+${vars.projectGoal && vars.outOfScope ? '- (none)' : '- PATH values still contain placeholders and must be set before operational use.'}
 
 ## Notes
-- This file represents current truth and must be updated after each admissible execution step.
+${vars.projectDescription ? `- Project: ${vars.projectDescription}\n` : ''}- This file represents current truth and must be updated after each admissible execution step.
 `;
 }
 
@@ -240,7 +243,7 @@ function traceTemplate(vars: TemplateVars): string {
 
 ## Entries
 
-- ${vars.date} — INIT: Scaffolded 5-level-governance files into workspace. Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, TRACE.md, CODIFY.md; gate_1=PASS (structure aligns with LAW), gate_2=PASS (REALITY matches created files).
+- ${vars.date} — INIT: Scaffolded 5-level-governance files into workspace${vars.projectGoal ? ` for goal: ${vars.projectGoal}` : ''}. Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, TRACE.md, CODIFY.md; gate_1=PASS (structure aligns with LAW), gate_2=PASS (REALITY matches created files).
 `;
 }
 
