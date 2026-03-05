@@ -70,7 +70,7 @@ async function handleInit(): Promise<void> {
   }
 
   const workspaceName = path.basename(root);
-  const vars = await runInitWizard(workspaceName);
+  const vars = await runInitWizard(workspaceName, root);
   if (!vars) {
     return; // user cancelled wizard
   }
