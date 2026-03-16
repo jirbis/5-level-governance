@@ -1,6 +1,19 @@
 export interface TemplateVars {
   workspaceName: string;
   date: string;
+  projectGoal?: string;
+  outOfScope?: string;
+  projectDescription?: string;
+  // auto-discovered fields
+  languages?: string[];
+  testFrameworks?: string[];
+  ciPlatforms?: string[];
+  license?: string;
+  repositoryUrl?: string;
+  sourceDir?: string;
+  testDir?: string;
+  existingFiles?: string[];
+  dockerized?: boolean;
 }
 
 export const GOVERNANCE_FILES = [
@@ -135,8 +148,9 @@ Define the admissible implementation route under LAW.
 
 ## Active Scope
 - Workspace: \`${vars.workspaceName}\`
-- Goal: \`<set concrete goal>\`
-- Out of scope: \`<set explicit exclusions>\`
+- Goal: \`${vars.projectGoal ?? '<set concrete goal>'}\`
+- Out of scope: \`${vars.outOfScope ?? '<set explicit exclusions>'}\`
+${vars.languages?.length ? `- Tech stack: ${vars.languages.join(", ")}${vars.testFrameworks?.length ? ` (tests: ${vars.testFrameworks.join(", ")})` : ""}` : ""}
 
 ## Step List (Deterministic Order)
 - [ ] \`P1\` Define/confirm goal and constraints.
@@ -205,6 +219,54 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 }
 
 function realityTemplate(vars: TemplateVars): string {
+  const artifactLines = [
+    "- `CLAUDE.md`",
+    "- `LAW.md`",
+    "- `PATH.md`",
+    "- `GATE.md`",
+    "- `REALITY.md`",
+    "- `TRACE.md`",
+    "- `CODIFY.md`",
+  ];
+  // Include pre-existing workspace files
+  if (vars.existingFiles?.length) {
+    for (const f of vars.existingFiles) {
+      if (!f.endsWith(".md") || !["CLAUDE.md","LAW.md","PATH.md","GATE.md","REALITY.md","TRACE.md","CODIFY.md"].includes(f)) {
+        artifactLines.push(`- \`${f}\``);
+      }
+    }
+  }
+
+  const envLines: string[] = [];
+  if (vars.languages?.length) {
+    envLines.push(`- Languages: ${vars.languages.join(", ")}`);
+  }
+  if (vars.testFrameworks?.length) {
+    envLines.push(`- Test frameworks: ${vars.testFrameworks.join(", ")}`);
+  }
+  if (vars.ciPlatforms?.length) {
+    envLines.push(`- CI/CD: ${vars.ciPlatforms.join(", ")}`);
+  }
+  if (vars.license) {
+    envLines.push(`- License: ${vars.license}`);
+  }
+  if (vars.repositoryUrl) {
+    envLines.push(`- Repository: \`${vars.repositoryUrl}\``);
+  }
+  if (vars.sourceDir) {
+    envLines.push(`- Source directory: \`${vars.sourceDir}\``);
+  }
+  if (vars.testDir) {
+    envLines.push(`- Test directory: \`${vars.testDir}\``);
+  }
+  if (vars.dockerized) {
+    envLines.push("- Dockerized: yes");
+  }
+
+  const envSection = envLines.length
+    ? `\n## Environment\n${envLines.join("\n")}\n`
+    : "";
+
   return `# REALITY
 
 ## Current State Snapshot
@@ -212,21 +274,15 @@ function realityTemplate(vars: TemplateVars): string {
 - Workspace root: \`${vars.workspaceName}\`
 - Active PATH step: \`P1\`
 - Last gate status: \`UNKNOWN\`
-
+${envSection}
 ## Existing Artifacts
-- \`CLAUDE.md\`
-- \`LAW.md\`
-- \`PATH.md\`
-- \`GATE.md\`
-- \`REALITY.md\`
-- \`TRACE.md\`
-- \`CODIFY.md\`
+${artifactLines.join("\n")}
 
 ## Open Risks
-- PATH values still contain placeholders and must be set before operational use.
+${vars.projectGoal && vars.outOfScope ? '- (none)' : '- PATH values still contain placeholders and must be set before operational use.'}
 
 ## Notes
-- This file represents current truth and must be updated after each admissible execution step.
+${vars.projectDescription ? `- Project: ${vars.projectDescription}\n` : ''}- This file represents current truth and must be updated after each admissible execution step.
 `;
 }
 
@@ -240,7 +296,7 @@ function traceTemplate(vars: TemplateVars): string {
 
 ## Entries
 
-- ${vars.date} — INIT: Scaffolded 5-level-governance files into workspace. Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, TRACE.md, CODIFY.md; gate_1=PASS (structure aligns with LAW), gate_2=PASS (REALITY matches created files).
+- ${vars.date} — INIT: Scaffolded 5-level-governance files into workspace${vars.projectGoal ? ` for goal: ${vars.projectGoal}` : ''}. Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, TRACE.md, CODIFY.md; gate_1=PASS (structure aligns with LAW), gate_2=PASS (REALITY matches created files).
 `;
 }
 

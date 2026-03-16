@@ -2,11 +2,11 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { GOVERNANCE_FILES, getTemplate, GovernanceFile } from "./templates";
-import { todayISO } from "./parsers";
 import { runGate1, runGate2, GateResult } from "./gates";
 import { initDiagnostics, updateDiagnostics, clearDiagnostics } from "./diagnostics";
 import { GovernanceTreeProvider, createStatusBarItem, updateStatusBarItem } from "./treeView";
 import { appendTraceEntry, updateReality } from "./traceAppend";
+import { runInitWizard } from "./wizard";
 
 let outputChannel: vscode.OutputChannel;
 let treeProvider: GovernanceTreeProvider;
@@ -70,10 +70,13 @@ async function handleInit(): Promise<void> {
   }
 
   const workspaceName = path.basename(root);
-  const date = todayISO();
+  const vars = await runInitWizard(workspaceName, root);
+  if (!vars) {
+    return; // user cancelled wizard
+  }
 
   for (const file of GOVERNANCE_FILES) {
-    const content = getTemplate(file, { workspaceName, date });
+    const content = getTemplate(file, vars);
     fs.writeFileSync(path.join(root, file), content, "utf-8");
   }
 
