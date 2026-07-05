@@ -31,7 +31,6 @@ check_required_files() {
   require_file "GATE.md"
   require_file "REALITY.md"
   require_file "TRACE.md"
-  require_file "CODIFY.md"
 }
 
 run_gate1() {

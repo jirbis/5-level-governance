@@ -14,7 +14,6 @@ Define the admissible implementation route under LAW.
 - [ ] `P3` Execute smallest admissible change set.
 - [ ] `P4` Update REALITY and TRACE.
 - [ ] `P5` Run Gate 2 on resulting state.
-- [ ] `P6` Apply CODIFY decision.
 
 ## Current Pointer
 - `active_step`: `P1`

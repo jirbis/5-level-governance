@@ -11,16 +11,14 @@ It implements the LAW-PATH-TRACE-GATE-REALITY discipline as a strict artifact wo
 - `GATE.md`: admissibility checks (before work and before done).
 - `REALITY.md`: current state of repo/artifacts.
 - `TRACE.md`: append-only execution evidence.
-- `CODIFY.md`: update policy for improving LAW/PATH/agent behavior.
 
-## 7-Step Combined Loop
+## 6-Step Combined Loop
 1. Validate against `LAW.md`.
 2. Define or update `PATH.md`.
 3. Run Gate 1 (PATH admissibility).
 4. Execute work and update `REALITY.md`.
 5. Append actual changes to `TRACE.md`.
 6. Run Gate 2 (REALITY admissibility).
-7. Codify learning in `PATH.md`, `LAW.md`, or agent instructions.
 
 ## Usage
 1. Open this folder as the working context.
