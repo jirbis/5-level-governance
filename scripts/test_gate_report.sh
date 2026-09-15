@@ -22,20 +22,11 @@ scaffold() {
   cat > "$d/REALITY.md" <<'R'
 # REALITY
 
-## Current State Snapshot
-- Date: `2026-09-15`
-- Workspace root: `fixture`
-- Active PATH step: `P1`
-- Last gate status: `PASS`
+<!-- generated:snapshot -->
+<!-- /generated:snapshot -->
 
-## Existing Artifacts
-- `CLAUDE.md`
-- `LAW.md`
-- `PATH.md`
-- `GATE.md`
-- `REALITY.md`
-- `TRACE.md`
-- `DECISIONS.md`
+<!-- generated:artifacts -->
+<!-- /generated:artifacts -->
 
 ## Open Risks
 - (none)
@@ -58,6 +49,10 @@ P
   git -C "$d" config user.name t
   git -C "$d" add -A >/dev/null
   git -C "$d" commit -qm base
+  # generate REALITY the way a real workspace would, so the staleness check has
+  # something current to compare against
+  ( source "$ROOT/scripts/reality_gen.sh"; reality_render "$d" ) > "$d/R.tmp"
+  mv "$d/R.tmp" "$d/REALITY.md"
   printf '%s' "$d"
 }
 

@@ -14,6 +14,12 @@ execFileSync("npx", ["esbuild", "src/parsers.ts", "--format=esm", "--bundle", `-
   stdio: ["ignore", "ignore", "inherit"],
 });
 
+const realityBundle = path.join(out, "realityRules.mjs");
+execFileSync("npx", ["esbuild", "src/realityRules.ts", "--format=esm", "--bundle", `--outfile=${realityBundle}`], {
+  cwd: path.join(root, "vscode-extension"),
+  stdio: ["ignore", "ignore", "inherit"],
+});
+
 const traceBundle = path.join(out, "traceRules.mjs");
 execFileSync("npx", ["esbuild", "src/traceRules.ts", "--format=esm", "--bundle", `--outfile=${traceBundle}`], {
   cwd: path.join(root, "vscode-extension"),
@@ -22,6 +28,7 @@ execFileSync("npx", ["esbuild", "src/traceRules.ts", "--format=esm", "--bundle",
 
 const { pathMatchesGlob, parsePathMd } = await import(bundle);
 const { prefixViolation, hasApprovedEntry } = await import(traceBundle);
+const { realityStaleness } = await import(realityBundle);
 
 const cases = [
   ["scripts/gate_enforce.sh", "scripts/**"],
@@ -149,6 +156,51 @@ for (const [label, section, want] of decisionCases) {
     console.log(`  ok   decisions ${label} -> ${want} (both)`);
   } else {
     console.log(`  FAIL decisions ${label}: ts=${ts} sh=${sh} want=${want}`);
+    fails++;
+  }
+}
+
+// REALITY staleness: both runtimes must agree on the verdict and the wording.
+const realityBlock = (files) =>
+  `# REALITY\n\n<!-- generated:artifacts -->\n## Existing Artifacts\n${files
+    .map((f) => "- \`" + f + "\`")
+    .join("\n")}\n<!-- /generated:artifacts -->\n\n## Open Risks\n- kept\n`;
+
+const realityCases = [
+  ["current", realityBlock(["a.txt", "b/c.txt"]), ["a.txt", "b/c.txt"], false],
+  ["unrecorded file", realityBlock(["a.txt"]), ["a.txt", "new.txt"], true],
+  ["recorded but absent", realityBlock(["a.txt", "gone.txt"]), ["a.txt"], true],
+  ["no markers at all", "# REALITY\n\n## Existing Artifacts\n- `a.txt`\n", ["a.txt"], true],
+];
+
+for (const [label, reality, tracked, wantStale] of realityCases) {
+  const ts = realityStaleness(reality, tracked);
+  const dir = mkdtempSync(path.join(tmpdir(), "real-"));
+  execFileSync("git", ["-C", dir, "init", "-q"]);
+  execFileSync("git", ["-C", dir, "config", "user.email", "t@t.t"]);
+  execFileSync("git", ["-C", dir, "config", "user.name", "t"]);
+  writeFileSync(path.join(dir, "REALITY.md"), reality);
+  for (const f of tracked) {
+    const full = path.join(dir, f);
+    execFileSync("mkdir", ["-p", path.dirname(full)]);
+    writeFileSync(full, "x");
+  }
+  // stage exactly the tracked set so `git ls-files` matches the case
+  execFileSync("git", ["-C", dir, "add", "--", ...tracked]);
+  const shOut = execFileSync("bash", [
+    "-c",
+    `source "${root}/scripts/reality_gen.sh"; { reality_is_current "$1" && echo __CURRENT__; } || true`,
+    "_",
+    dir,
+  ]).toString().trim();
+  rmSync(dir, { recursive: true, force: true });
+
+  const shStale = shOut !== "__CURRENT__";
+  const tsMsg = ts.stale ? ts.reason : "__CURRENT__";
+  if (ts.stale === shStale && ts.stale === wantStale && tsMsg === shOut) {
+    console.log(`  ok   reality ${label} -> ${wantStale ? "stale" : "current"} :: ${shOut}`);
+  } else {
+    console.log(`  FAIL reality ${label}: ts="${tsMsg}" sh="${shOut}" wantStale=${wantStale}`);
     fails++;
   }
 }

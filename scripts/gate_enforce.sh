@@ -10,6 +10,8 @@ source "$ROOT/scripts/path_scope.sh"
 source "$ROOT/scripts/trace_append_only.sh"
 # shellcheck source=scripts/decision_log.sh
 source "$ROOT/scripts/decision_log.sh"
+# shellcheck source=scripts/reality_gen.sh
+source "$ROOT/scripts/reality_gen.sh"
 
 fail_count=0
 
@@ -221,10 +223,16 @@ run_gate2() {
   check_append_only "DECISIONS.md" "DECISIONS"
   check_law_amendment_recorded
 
-  if grep -q 'Last gate status: `UNKNOWN`' "$ROOT/REALITY.md"; then
-    fail "REALITY.md still has unknown gate status"
+  # REALITY is generated, so "is it current?" is answerable: regenerate the
+  # artifact list and compare. This replaces two weaker checks - that the file
+  # did not contain the word UNKNOWN, and that everything it listed existed.
+  # Neither could see a file that existed but was never recorded, which is the
+  # drift this repository actually suffered, twice.
+  local staleness
+  if staleness="$(reality_is_current "$ROOT")"; then
+    pass "REALITY.md matches the tree"
   else
-    pass "REALITY.md has a resolved gate status"
+    fail "REALITY: $staleness"
   fi
 
   if grep -Eq "^- [0-9]{4}-[0-9]{2}-[0-9]{2} .*gate_1=.*gate_2=" "$ROOT/TRACE.md"; then
@@ -233,16 +241,6 @@ run_gate2() {
     fail "TRACE.md missing dated gate evidence with gate_1 and gate_2"
   fi
 
-  local missing=0
-  while IFS= read -r artifact; do
-    if [[ -n "$artifact" && ! -f "$ROOT/$artifact" ]]; then
-      fail "REALITY artifact missing on disk: $artifact"
-      missing=1
-    fi
-  done < <(sed -n 's/^- `\([^`]*\)`$/\1/p' "$ROOT/REALITY.md")
-  if [[ $missing -eq 0 ]]; then
-    pass "all REALITY.md listed artifacts exist on disk"
-  fi
 }
 
 case "$MODE" in

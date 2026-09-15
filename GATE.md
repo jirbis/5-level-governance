@@ -33,6 +33,8 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 - No changed file matches a `forbidden_paths` pattern.
 - `TRACE.md` and `DECISIONS.md` have only grown: every version has the previous
   one as an exact byte prefix.
+- `REALITY.md` matches the tree: its generated artifact region is exactly what
+  regeneration would produce.
 - If `LAW.md` changed, `DECISIONS.md` carries a new entry naming it with a
   recorded `approved_by`.
 - No forbidden LAW condition appears in REALITY.
@@ -45,6 +47,8 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 - Any version of `TRACE.md` or `DECISIONS.md` in the range rewrote, reordered,
   truncated or deleted an earlier entry.
 - `LAW.md` changed without a new approved `DECISIONS.md` entry naming it.
+- `REALITY.md` is stale: a tracked file is unrecorded, or a recorded artifact is
+  no longer tracked.
 - The active step declares no scope at all, or the workspace is not a git
   repository: scope that cannot be verified is not scope.
 - TRACE is incomplete or missing.
@@ -86,6 +90,21 @@ exact byte prefix.
   does not justify a later amendment, and an approval recorded in one entry does
   not carry over to a different entry's target.
 - An `approved_by` that is empty, a placeholder or `TBD` is not an approval.
+
+### REALITY Currency (Mechanical)
+`REALITY.md` is the artifact truth, so it is generated rather than written. The
+regions between `<!-- generated:snapshot -->` and `<!-- generated:artifacts -->`
+markers are rewritten by `make reality`; everything else in the file is written
+by hand and preserved across regeneration.
+
+Gate 2 regenerates the artifact region and compares. This replaces two weaker
+checks — that the file did not contain the word `UNKNOWN`, and that every
+artifact it listed existed on disk. Neither could see a file that existed but
+was never recorded, which is the drift this repository actually suffered twice.
+
+Only the artifact region is compared. The snapshot carries the generation date
+and HEAD, which move for reasons that are not drift; requiring them to be
+current would turn every commit into a stale-REALITY failure.
 
 **What this check cannot do.** It verifies that an approval is *recorded*, not
 that it was *given*. Nothing inside a file can prove who wrote it. Binding

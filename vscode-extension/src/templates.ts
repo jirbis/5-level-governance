@@ -262,10 +262,10 @@ function realityTemplate(vars: TemplateVars): string {
     "- `TRACE.md`",
     "- `DECISIONS.md`",
   ];
-  // Include pre-existing workspace files
   if (vars.existingFiles?.length) {
+    const canon = ["CLAUDE.md","LAW.md","PATH.md","GATE.md","REALITY.md","TRACE.md","DECISIONS.md"];
     for (const f of vars.existingFiles) {
-      if (!f.endsWith(".md") || !["CLAUDE.md","LAW.md","PATH.md","GATE.md","REALITY.md","TRACE.md","DECISIONS.md"].includes(f)) {
+      if (!canon.includes(f)) {
         artifactLines.push(`- \`${f}\``);
       }
     }
@@ -287,36 +287,31 @@ function realityTemplate(vars: TemplateVars): string {
   if (vars.repositoryUrl) {
     envLines.push(`- Repository: \`${vars.repositoryUrl}\``);
   }
-  if (vars.sourceDir) {
-    envLines.push(`- Source directory: \`${vars.sourceDir}\``);
-  }
-  if (vars.testDir) {
-    envLines.push(`- Test directory: \`${vars.testDir}\``);
-  }
-  if (vars.dockerized) {
-    envLines.push("- Dockerized: yes");
-  }
 
-  const envSection = envLines.length
-    ? `\n## Environment\n${envLines.join("\n")}\n`
-    : "";
-
+  // The regions between the markers are rewritten by `make reality`; everything
+  // else in this file is written by hand and preserved across regeneration.
   return `# REALITY
 
+<!-- generated:snapshot -->
 ## Current State Snapshot
-- Date: \`${vars.date}\`
+- Generated: \`${vars.date}\`
 - Workspace root: \`${vars.workspaceName}\`
 - Active PATH step: \`P1\`
-- Last gate status: \`UNKNOWN\`
-${envSection}
+- HEAD at generation: \`unknown\`
+- Working tree at generation: \`unknown\`
+<!-- /generated:snapshot -->
+
+<!-- generated:artifacts -->
 ## Existing Artifacts
 ${artifactLines.join("\n")}
-
+<!-- /generated:artifacts -->
+${envLines.length ? `\n## Environment\n${envLines.join("\n")}\n` : ""}
 ## Open Risks
-${vars.projectGoal && vars.outOfScope ? '- (none)' : '- PATH values still contain placeholders and must be set before operational use.'}
+- PATH values still contain placeholders and must be set before operational use.
 
 ## Notes
-${vars.projectDescription ? `- Project: ${vars.projectDescription}\n` : ''}- This file represents current truth and must be updated after each admissible execution step.
+- The generated regions above are rewritten by \`make reality\`. Everything else
+  in this file is written by hand and survives regeneration.
 `;
 }
 

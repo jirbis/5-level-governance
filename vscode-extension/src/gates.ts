@@ -9,6 +9,7 @@ import {
   pathMatchesGlob,
 } from "./parsers";
 import { hasApprovedEntry, prefixViolation } from "./traceRules";
+import { realityStaleness } from "./realityRules";
 
 export interface Check {
   pass: boolean;
@@ -512,56 +513,32 @@ export function runGate2(): GateResult {
   // Policy may not change without a recorded approval
   checks.push(...checkLawAmendmentRecorded(root));
 
-  // Check REALITY.md gate status is not UNKNOWN
+  // REALITY is generated, so "is it current?" is answerable: compare the
+  // recorded artifact region against the tracked tree. This replaces two weaker
+  // checks - that the file did not contain the word UNKNOWN, and that
+  // everything it listed existed. Neither could see a file that existed but was
+  // never recorded, which is the drift this repository actually suffered.
   const realityContent = readFile(root, "REALITY.md");
   if (realityContent) {
-    if (/Last gate status:\s*`UNKNOWN`/.test(realityContent)) {
-      const loc = findLineAndColumn(
-        realityContent,
-        /Last gate status:\s*`UNKNOWN`/
-      );
+    const tracked = (git(root, ["ls-files"]) ?? "")
+      .split("\n")
+      .map((f) => f.trim())
+      .filter((f) => f.length > 0);
+    const staleness = realityStaleness(realityContent, tracked);
+    if (staleness.stale) {
+      const loc = findLineNumber(realityContent, /generated:artifacts/);
       checks.push({
         pass: false,
-        message: "REALITY.md still has unknown gate status",
+        message: `REALITY: ${staleness.reason}`,
         file: "REALITY.md",
-        line: loc?.line,
-        matchStart: loc?.matchStart,
-        matchEnd: loc?.matchEnd,
+        line: loc,
       });
     } else {
       checks.push({
         pass: true,
-        message: "REALITY.md has a resolved gate status",
+        message: "REALITY.md matches the tree",
         file: "REALITY.md",
       });
-    }
-
-    // Check all artifacts exist on disk
-    const artifactRegex = /^- `([^`]+)`$/gm;
-    const artifactSection = realityContent.match(
-      /## Existing Artifacts\n([\s\S]*?)(?=\n##|$)/
-    );
-    if (artifactSection) {
-      let am;
-      let missing = false;
-      while ((am = artifactRegex.exec(artifactSection[1])) !== null) {
-        const artifact = am[1];
-        if (!fileExists(root, artifact)) {
-          checks.push({
-            pass: false,
-            message: `REALITY artifact missing on disk: ${artifact}`,
-            file: "REALITY.md",
-          });
-          missing = true;
-        }
-      }
-      if (!missing) {
-        checks.push({
-          pass: true,
-          message: "All REALITY.md listed artifacts exist on disk",
-          file: "REALITY.md",
-        });
-      }
     }
   }
 

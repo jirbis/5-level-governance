@@ -75,9 +75,21 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: README.md, PATH.md
 - [x] `P24` Update REALITY, append TRACE, run Gate 2.
       allowed_paths: PATH.md, DECISIONS.md
+- [x] `P25` Declare scope for generating REALITY instead of writing it.
+      allowed_paths: PATH.md
+- [x] `P26` Generate the mechanical sections of REALITY from the tree, preserving hand-written sections, with tests.
+      allowed_paths: scripts/**, Makefile, REALITY.md, PATH.md
+- [x] `P27` Replace the weak REALITY checks in Gate 2 with a staleness check against the regenerated content.
+      allowed_paths: scripts/**, PATH.md
+- [x] `P28` Mirror the staleness check in the VS Code extension and its emitted template.
+      allowed_paths: vscode-extension/src/*.ts, PATH.md
+- [x] `P29` Document the generated artifact and the criterion.
+      allowed_paths: GATE.md, README.md, PATH.md
+- [x] `P30` Update REALITY, append TRACE, run Gate 2.
+      allowed_paths: PATH.md, DECISIONS.md
 
 ## Current Pointer
-- `active_step`: `P24`
+- `active_step`: `P30`
 
 ## Blocking Questions
 - (none)

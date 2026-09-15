@@ -17,7 +17,12 @@ test:
 	bash ./scripts/test_trace_append_only.sh
 	bash ./scripts/test_decision_log.sh
 	bash ./scripts/test_gate_report.sh
+	bash ./scripts/test_reality_gen.sh
 	node ./scripts/test_extension_parity.mjs
+
+.PHONY: reality
+reality:
+	@bash ./scripts/reality_update.sh
 
 .PHONY: report
 report:

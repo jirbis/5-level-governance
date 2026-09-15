@@ -9,7 +9,7 @@ It implements the LAW-PATH-TRACE-GATE-REALITY discipline as a strict artifact wo
 - `LAW.md`: non-negotiable doctrine and constraints.
 - `PATH.md`: intended implementation route.
 - `GATE.md`: admissibility checks (before work and before done).
-- `REALITY.md`: current state of repo/artifacts.
+- `REALITY.md`: current state of repo/artifacts; generated sections kept current by `make reality`.
 - `TRACE.md`: append-only execution evidence.
 - `DECISIONS.md`: append-only record of changes to the rules, with approvals.
 
@@ -68,11 +68,47 @@ need comments on fork pull requests, split the workflow: run the gates on
 separate `workflow_run` workflow that has write permission. Do not reach for
 `pull_request_target` — it runs with a writable token against untrusted code.
 
+## Generated REALITY
+
+`REALITY.md` is supposed to be the artifact truth, and a hand-written list
+drifts — this repository twice carried a REALITY that omitted files sitting on
+disk. So the mechanical parts are generated and the rest is not:
+
+```markdown
+<!-- generated:snapshot -->     ← rewritten by `make reality`
+<!-- generated:artifacts -->    ← rewritten by `make reality`
+
+## Deltas This Run              ← yours, preserved verbatim
+## Open Risks                   ← yours, preserved verbatim
+```
+
+`make reality` splices only between the markers. A file with no markers is left
+untouched and the command fails rather than replacing your prose with a
+template.
+
+Gate 2 then regenerates the artifact region and compares:
+
+```
+FAIL: REALITY: REALITY.md is stale; run `make reality` — unrecorded: scripts/new.sh
+```
+
+This catches a tracked file that was never recorded — the direction the old
+"do all listed artifacts exist?" check was blind to.
+
+Only the artifact region is compared. The snapshot carries the generation date
+and HEAD, which move for reasons that are not drift, and requiring them to be
+current would make every commit a stale-REALITY failure.
+
+Workspaces above `REALITY_FILE_LIMIT` tracked files (200 by default) are listed
+by directory with counts instead of file by file: a record nobody can read is
+not a record.
+
 ## Gate Enforcement Command
 - Run all checks: `make gate`
 - Run Gate 1 only: `make gate1`
 - Run Gate 2 only: `make gate2`
 - Run the test suite: `make test`
+- Regenerate REALITY: `make reality`
 - Render the Markdown report: `make report`
 - Direct script usage: `bash ./scripts/gate_enforce.sh [gate1|gate2|all]`
 
