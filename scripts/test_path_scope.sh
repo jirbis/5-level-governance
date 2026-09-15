@@ -134,12 +134,24 @@ out="$(run_gate2_in "$d")"
 grep -q "forbidden file changed: allowed/secret.txt" <<<"$out" && ok "forbidden_paths beats allowed_paths" || no "forbidden_paths should win"
 rm -rf "$d"
 
-# REALITY/TRACE are implicitly writable
+# REALITY.md and trace/** are implicitly writable: the loop mandates them, so a
+# step must not have to declare them. This is the record directory, not the
+# removed TRACE.md.
 d="$(make_repo "$path_md_scoped")"
-echo "- 2026-01-01 - note; gate_1=PASS, gate_2=PASS." >> "$d/TRACE.md"
+printf '# 2026-01-02 — NOTE\n\nnote; gate_1=PASS, gate_2=PASS.\n' > "$d/trace/2026-01-02-note.md"
 echo "note" >> "$d/REALITY.md"
 out="$(run_gate2_in "$d")"
-grep -q "^PASS: PATH scope" <<<"$out" && ok "REALITY.md/TRACE.md implicitly in scope" || no "bookkeeping files should be implicitly allowed"
+grep -q "^PASS: PATH scope" <<<"$out" && ok "REALITY.md and trace/** implicitly in scope" || no "bookkeeping paths should be implicitly allowed: $(grep 'PATH scope' <<<"$out")"
+rm -rf "$d"
+
+# A bad diff base must fail closed. A swallowed git error and a clean tree look
+# identical, so treating one as the other passes the whole gate vacuously.
+d="$(make_repo "$path_md_scoped")"
+mkdir -p "$d/elsewhere"; echo hi > "$d/elsewhere/file.txt"
+out="$(GOVERNANCE_DIFF_BASE=no-such-ref bash "$d/scripts/gate_enforce.sh" gate2 2>&1)"
+grep -q "is not a commit this repository can resolve" <<<"$out" && ok "an unresolvable diff base is named" || no "bad base should be named: $out"
+grep -q "Gate enforcement result: FAIL" <<<"$out" && ok "an unresolvable diff base fails the gate" || no "bad base must not pass"
+grep -q "^PASS: PATH scope" <<<"$out" && no "scope must not report PASS on an unverifiable base" || ok "scope does not pass vacuously"
 rm -rf "$d"
 
 # PATH.md is NOT implicitly writable

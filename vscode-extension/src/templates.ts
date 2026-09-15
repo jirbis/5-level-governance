@@ -89,17 +89,17 @@ You are an execution agent operating under LAW-PATH-TRACE-GATE-REALITY.
 2. \`PATH.md\`
 3. \`GATE.md\`
 4. \`REALITY.md\`
-5. \`TRACE.md\`
-6. \`DECISIONS.md\`
+5. \`trace/\` (one file per entry)
+6. \`decisions/\` (one file per rule change)
 
-If any required file is missing, create it from template and record in \`TRACE.md\` before continuing.
+If any required file is missing, create it from template and record it in a new \`trace/\` entry before continuing.
 
 ## Hard Rules
 - No invention beyond \`LAW.md\` and \`PATH.md\`.
 - No silent scope expansion.
 - No hidden reasoning as state; persist key decisions to files.
-- If a gate fails: stop, record FAIL in \`TRACE.md\`, and return blockers.
-- \`TRACE.md\` is append-only.
+- If a gate fails: stop, record FAIL in a new \`trace/\` entry, and return blockers.
+- \`trace/\` and \`decisions/\` are append-only: add a file, never modify or delete one.
 
 ## Required Execution Loop
 1. **LAW Check**
@@ -113,11 +113,11 @@ If any required file is missing, create it from template and record in \`TRACE.m
 5. **REALITY Update**
    Write current artifact state and deltas in \`REALITY.md\`.
 6. **TRACE Update**
-   Log what actually changed in \`TRACE.md\` (files, outcomes, deviations).
+   Log what actually changed in a NEW file under \`trace/\` named \`YYYY-MM-DD-slug.md\` (files, outcomes, deviations). Never edit an existing entry.
 7. **Gate 2 (Reality Admissibility)**
    Verify REALITY conforms to PATH and LAW.
 8. **Decide**
-   Apply the \`DECISIONS.md\` matrix to decide whether learning updates PATH, LAW, or agent instruction. Any change to \`LAW.md\` requires a new approved \`DECISIONS.md\` entry; Gate 2 rejects an amendment without one.
+   Apply the \`decisions/\` matrix to decide whether learning updates PATH, LAW, or agent instruction. Any change to \`LAW.md\` requires a new approved file under \`decisions/\`; Gate 2 rejects an amendment without one.
 
 ## Output Contract For Every Run
 - \`result\`: PASS or FAIL
@@ -125,7 +125,7 @@ If any required file is missing, create it from template and record in \`TRACE.m
 - \`files_changed\`: explicit list
 - \`gate_1\`: PASS/FAIL with reason
 - \`gate_2\`: PASS/FAIL with reason
-- \`decision\`: NONE, or the \`DECISIONS.md\` entry id recorded this run
+- \`decision\`: NONE, or the \`decisions/\` entry recorded this run
 - \`next_allowed_step\`: exact id or STOP
 
 Stop is valid.
@@ -145,7 +145,7 @@ Protect doctrinal integrity while enabling disciplined execution.
 - No step is complete without TRACE evidence.
 - No merge or state acceptance without Gate 2 PASS.
 - No change is admissible outside a scope declared in \`PATH.md\`.
-- No rule changes without an approved entry in \`DECISIONS.md\`.
+- No rule changes without an approved entry in \`decisions/\`.
 - Stop is always valid when constraints are violated or unknowns block progress.
 
 ## Forbidden Actions
@@ -155,7 +155,7 @@ Protect doctrinal integrity while enabling disciplined execution.
 - Rewriting prior TRACE history.
 - Rewriting prior DECISIONS history.
 - Changing files outside the scope declared for the active step.
-- Amending this file without a recorded, approved \`DECISIONS.md\` entry.
+- Amending this file without a recorded, approved \`decisions/\` entry.
 
 ## Invariants
 - LAW prevents entropy.
@@ -168,7 +168,7 @@ Protect doctrinal integrity while enabling disciplined execution.
 Changes to LAW require:
 1. A recorded gate failure that motivates the change.
 2. A proposed amendment in minimal form.
-3. Explicit approval recorded in \`DECISIONS.md\`, which Gate 2 verifies.
+3. Explicit approval recorded in \`decisions/\`, which Gate 2 verifies.
 `;
 }
 
@@ -198,7 +198,7 @@ real git diff against these patterns, so an undeclared scope admits no change.
 - \`**\` matches any number of path segments; \`*\` and \`?\` never cross \`/\`.
 - A pattern ending in \`/\` means that directory and everything under it.
 - \`forbidden_paths\` wins over \`allowed_paths\`.
-- \`REALITY.md\` and \`TRACE.md\` are always writable: the loop mandates them.
+- \`REALITY.md\` and \`trace/**\` are always writable: the loop mandates them.
 - \`PATH.md\` is NOT implicitly writable. Widening the route must be declared.
 
 ## Step List (Deterministic Order)
@@ -213,7 +213,7 @@ real git diff against these patterns, so an undeclared scope admits no change.
 - [ ] \`P5\` Run Gate 2 on resulting state.
       allowed_paths: PATH.md
 - [ ] \`P6\` Apply the DECISIONS matrix and record any rule change.
-      allowed_paths: PATH.md, DECISIONS.md
+      allowed_paths: PATH.md, decisions/**
 
 ## Current Pointer
 - \`active_step\`: \`P1\`
@@ -248,7 +248,7 @@ Does the intended PATH conform to LAW?
 - PATH contains ambiguous action that can alter architecture without review.
 
 ### On FAIL
-- Record FAIL in \`TRACE.md\`.
+- Record FAIL in a new \`trace/\` entry.
 - Stop or produce a new PATH and re-run Gate 1.
 
 ## Gate 2: REALITY Admissibility (Before Accept/Merge)
@@ -274,29 +274,34 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 - LAW was implicitly changed.
 
 ### On FAIL
-- Record FAIL in \`TRACE.md\`.
+- Record FAIL in a new \`trace/\` entry.
 - Stop, then either revert pathologically unsafe change or redefine PATH and re-run gates.
 `;
 }
 
 function realityTemplate(vars: TemplateVars): string {
-  const artifactLines = [
-    "- `CLAUDE.md`",
-    "- `LAW.md`",
-    "- `PATH.md`",
-    "- `GATE.md`",
-    "- `REALITY.md`",
-    "- `TRACE.md`",
-    "- `DECISIONS.md`",
+  // Must match what init actually writes, including the seeded record files:
+  // a REALITY listing files that do not exist fails Gate 2 on the first run.
+  const canon = [
+    "CLAUDE.md",
+    "LAW.md",
+    "PATH.md",
+    "GATE.md",
+    "REALITY.md",
+    "decisions/README.md",
+    "trace/README.md",
+    `trace/${vars.date}-init.md`,
   ];
-  if (vars.existingFiles?.length) {
-    const canon = ["CLAUDE.md","LAW.md","PATH.md","GATE.md","REALITY.md","TRACE.md","DECISIONS.md"];
-    for (const f of vars.existingFiles) {
-      if (!canon.includes(f)) {
-        artifactLines.push(`- \`${f}\``);
-      }
+  const artifactPaths = [...canon];
+  for (const f of vars.existingFiles ?? []) {
+    if (!artifactPaths.includes(f)) {
+      artifactPaths.push(f);
     }
   }
+  // Sorted the same way scripts/reality_gen.sh sorts, or the very first
+  // `make reality` reports this file stale over nothing but ordering.
+  artifactPaths.sort();
+  const artifactLines = artifactPaths.map((f) => `- \`${f}\``);
 
   const envLines: string[] = [];
   if (vars.languages?.length) {
@@ -356,7 +361,7 @@ Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, trace/, decisions/.
 function decisionsReadmeTemplate(): string {
   return `# DECISIONS (Append-Only)
 
-The record of changes to the rules. \`TRACE.md\` records what the work did;
+The record of changes to the rules. \`trace/\` records what the work did;
 this file records what changed the rules that govern the work.
 
 ## Rules

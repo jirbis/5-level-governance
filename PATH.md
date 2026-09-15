@@ -105,9 +105,23 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: PATH.md, decisions/**, trace/**
 - [x] `P39` Stop the CI workflow writing its report inside the workspace it is checking.
       allowed_paths: .github/workflows/**, README.md, PATH.md
+- [x] `P40` Declare scope for the review findings on pull request #6.
+      allowed_paths: PATH.md
+- [x] `P41` Fail closed on an unresolvable diff base instead of treating it as an empty diff.
+      allowed_paths: scripts/**, vscode-extension/src/*.ts, PATH.md
+- [x] `P42` Make the extension's Update REALITY command splice the generated regions instead of overwriting the file.
+      allowed_paths: vscode-extension/src/*.ts, PATH.md
+- [x] `P43` Implicitly allow `trace/**` rather than the removed `TRACE.md`, in both implementations.
+      allowed_paths: scripts/**, vscode-extension/src/*.ts, PATH.md
+- [x] `P44` Finish the record migration inside the emitted templates.
+      allowed_paths: vscode-extension/src/*.ts, PATH.md
+- [x] `P45` Share the artifact-listing rules, including the file-count threshold, between both implementations.
+      allowed_paths: scripts/**, vscode-extension/src/*.ts, PATH.md
+- [x] `P46` Update REALITY, record the fixes, run Gate 2.
+      allowed_paths: PATH.md, trace/**
 
 ## Current Pointer
-- `active_step`: `P39`
+- `active_step`: `P46`
 
 ## Blocking Questions
 - (none)

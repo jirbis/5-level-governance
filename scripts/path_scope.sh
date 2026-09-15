@@ -16,7 +16,7 @@
 
 # Always writable: the execution loop mandates writing these every run.
 # PATH.md is deliberately NOT here — changing the route must be declared in scope.
-SCOPE_IMPLICIT_ALLOW=("REALITY.md" "TRACE.md")
+SCOPE_IMPLICIT_ALLOW=("REALITY.md" "trace/**")
 
 scope_glob_to_regex() {
   local pat="$1" out="" ch i len
@@ -85,9 +85,24 @@ scope_rules() {
   ' "$path_md"
 }
 
+# Is <base> a commit git can actually resolve? An unresolvable base makes every
+# `git diff` fail, and a failed diff looks exactly like an empty one: no changed
+# files, nothing out of scope, nothing to check. The whole gate then passes
+# vacuously, which is worse than failing.
+scope_base_resolves() {
+  local root="$1" base="$2"
+  [[ -n "$base" ]] || return 1
+  git -C "$root" rev-parse --verify --quiet "${base}^{commit}" >/dev/null 2>&1
+}
+
 scope_diff_base() {
   local root="$1" ref mb
   if [[ -n "${GOVERNANCE_DIFF_BASE:-}" ]]; then
+    if ! scope_base_resolves "$root" "$GOVERNANCE_DIFF_BASE"; then
+      printf 'GOVERNANCE_DIFF_BASE=%s is not a commit this repository can resolve' \
+        "$GOVERNANCE_DIFF_BASE" >&2
+      return 1
+    fi
     printf '%s' "$GOVERNANCE_DIFF_BASE"
     return 0
   fi
@@ -101,11 +116,16 @@ scope_diff_base() {
   printf 'HEAD'
 }
 
+# Non-zero if the diff could not be taken. Callers must not treat that as "no
+# changes": a swallowed git error and a clean tree are indistinguishable.
 scope_changed_files() {
   local root="$1" base="$2"
+  if ! scope_base_resolves "$root" "$base"; then
+    return 1
+  fi
   {
-    git -C "$root" diff --name-only "$base" -- 2>/dev/null || true
-    git -C "$root" diff --name-only --cached "$base" -- 2>/dev/null || true
-    git -C "$root" ls-files --others --exclude-standard 2>/dev/null || true
+    git -C "$root" diff --name-only "$base" -- || return 1
+    git -C "$root" diff --name-only --cached "$base" -- || return 1
+    git -C "$root" ls-files --others --exclude-standard || return 1
   } | sed '/^$/d' | sort -u
 }

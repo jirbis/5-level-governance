@@ -19,6 +19,7 @@ test:
 	bash ./scripts/test_reality_gen.sh
 	bash ./scripts/test_shard_store.sh
 	node ./scripts/test_extension_parity.mjs
+	node ./scripts/test_init_integration.mjs
 
 .PHONY: trace decisions
 trace:

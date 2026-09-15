@@ -142,15 +142,22 @@ check_path_scope() {
   allow+=("${SCOPE_IMPLICIT_ALLOW[@]}")
 
   local base
-  base="$(scope_diff_base "$ROOT")"
+  if ! base="$(scope_diff_base "$ROOT" 2>&1)"; then
+    fail "PATH scope: $base"
+    return
+  fi
 
   local -a changed=()
-  local f
+  local f changed_out
+  if ! changed_out="$(scope_changed_files "$ROOT" "$base")"; then
+    fail "PATH scope: cannot read the diff against ${base:0:12}; scope cannot be verified"
+    return
+  fi
   while IFS= read -r f; do
     if [[ -n "$f" ]]; then
       changed+=("$f")
     fi
-  done < <(scope_changed_files "$ROOT" "$base")
+  done <<< "$changed_out"
 
   if (( ${#changed[@]} == 0 )); then
     pass "PATH scope: no changes against ${base:0:12}, nothing to place in scope"
@@ -212,7 +219,10 @@ check_shard_immutability() {
   fi
 
   local base violations
-  base="$(scope_diff_base "$ROOT")"
+  if ! base="$(scope_diff_base "$ROOT" 2>&1)"; then
+    fail "$label append-only: $base"
+    return
+  fi
 
   if violations="$(shard_immutability "$ROOT" "$base" "$dir")"; then
     pass "$dir/ is append-only against ${base:0:12}"
@@ -260,7 +270,10 @@ check_law_amendment_recorded() {
   fi
 
   local base reason
-  base="$(scope_diff_base "$ROOT")"
+  if ! base="$(scope_diff_base "$ROOT" 2>&1)"; then
+    fail "DECISIONS: $base"
+    return
+  fi
 
   if reason="$(decisions_check_law_amendment "$ROOT" "$base")"; then
     pass "DECISIONS: $reason against ${base:0:12}"

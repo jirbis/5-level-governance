@@ -7,10 +7,12 @@ export interface PathStep {
 }
 
 /**
- * Always writable: the execution loop mandates writing these every run.
+ * Always writable: the execution loop mandates writing these every run, so every
+ * step would otherwise have to declare them.
  * PATH.md is deliberately absent - widening the route must be declared in scope.
+ * So is decisions/ - changing the rules is a declared act, not bookkeeping.
  */
-export const IMPLICIT_ALLOWED_PATHS = ["REALITY.md", "TRACE.md"];
+export const IMPLICIT_ALLOWED_PATHS = ["REALITY.md", "trace/**"];
 
 /**
  * Convert a PATH scope glob into a RegExp anchored at the workspace root.

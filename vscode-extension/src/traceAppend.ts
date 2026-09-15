@@ -1,7 +1,9 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { parsePathMd, parseRealityMd, parseTraceMd, todayISO } from "./parsers";
+import { execFileSync } from "child_process";
+import { parsePathMd, todayISO } from "./parsers";
+import { renderReality, SnapshotFacts } from "./realityRules";
 import { GOVERNANCE_FILES } from "./templates";
 import { shardFileName } from "./shardRules";
 
@@ -116,90 +118,57 @@ export async function updateReality(): Promise<void> {
     return;
   }
 
-  const date = todayISO();
-  const workspaceName = path.basename(root);
+  const pathContent = fs.existsSync(path.join(root, "PATH.md"))
+    ? fs.readFileSync(path.join(root, "PATH.md"), "utf-8")
+    : "";
+  const activeStep = parsePathMd(pathContent).activeStep ?? "unknown";
 
-  // Get active step from PATH.md
-  let activeStep = "P1";
-  const pathFile = path.join(root, "PATH.md");
-  if (fs.existsSync(pathFile)) {
-    const pathContent = fs.readFileSync(pathFile, "utf-8");
-    const parsed = parsePathMd(pathContent);
-    activeStep = parsed.activeStep || "P1";
-  }
-
-  // Get last gate status from the most recent trace entry
-  let gateStatus = "UNKNOWN";
-  const traceFile = latestTraceEntry(root);
-  if (fs.existsSync(traceFile)) {
-    const traceContent = fs.readFileSync(traceFile, "utf-8");
-    const parsed = parseTraceMd(traceContent);
-    if (parsed.entries.length > 0) {
-      const last = parsed.entries[parsed.entries.length - 1];
-      if (last.gate1 && last.gate2) {
-        gateStatus =
-          last.gate1 === "PASS" && last.gate2 === "PASS" ? "PASS" : "FAIL";
-      }
+  const run = (args: string[]): string | null => {
+    try {
+      return execFileSync("git", ["-C", root, ...args], {
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+        maxBuffer: 64 * 1024 * 1024,
+      });
+    } catch {
+      return null;
     }
+  };
+
+  // Tracked plus untracked-but-not-ignored, matching scripts/reality_gen.sh.
+  const tracked = [
+    ...new Set(
+      [run(["ls-files"]) ?? "", run(["ls-files", "--others", "--exclude-standard"]) ?? ""]
+        .join("\n")
+        .split("\n")
+        .map((f) => f.trim())
+        .filter((f) => f.length > 0)
+    ),
+  ].sort();
+
+  const facts: SnapshotFacts = {
+    date: todayISO(),
+    workspaceName: path.basename(root),
+    activeStep,
+    headSha: (run(["rev-parse", "--short", "HEAD"]) ?? "unknown").trim(),
+    treeState: (run(["status", "--porcelain"]) ?? "").trim().length > 0 ? "dirty" : "clean",
+  };
+
+  const current = fs.readFileSync(realityPath, "utf-8");
+  const next = renderReality(current, facts, tracked);
+
+  // Refuse rather than overwrite. The hand-written sections are the reason only
+  // part of this file is generated, and a template would discard them.
+  if (next === null) {
+    vscode.window.showErrorMessage(
+      "REALITY.md has no generated regions. Add the generated:snapshot and " +
+        "generated:artifacts markers, or run `make reality`, before using this command."
+    );
+    return;
   }
 
-  // Discover existing governance artifacts
-  const artifacts: string[] = [];
-  for (const file of GOVERNANCE_FILES) {
-    if (fs.existsSync(path.join(root, file))) {
-      artifacts.push(file);
-    }
-  }
-
-  // Check for additional common files
-  for (const extra of ["README.md", "Makefile", "scripts/gate_enforce.sh"]) {
-    if (fs.existsSync(path.join(root, extra))) {
-      artifacts.push(extra);
-    }
-  }
-
-  // Build open risks
-  const risks: string[] = [];
-  if (fs.existsSync(pathFile)) {
-    const pathContent = fs.readFileSync(pathFile, "utf-8");
-    const parsed = parsePathMd(pathContent);
-    if (parsed.placeholders.length > 0) {
-      risks.push("PATH values still contain placeholders and must be set before operational use.");
-    }
-    if (parsed.hasBlockingQuestions) {
-      risks.push("PATH has unresolved blocking questions.");
-    }
-  }
-  if (gateStatus === "UNKNOWN") {
-    risks.push("Gate status has not been resolved yet.");
-  }
-
-  const artifactLines = artifacts.map((a) => `- \`${a}\``).join("\n");
-  const riskLines =
-    risks.length > 0
-      ? risks.map((r) => `- ${r}`).join("\n")
-      : "- (none)";
-
-  const newContent = `# REALITY
-
-## Current State Snapshot
-- Date: \`${date}\`
-- Workspace root: \`${workspaceName}\`
-- Active PATH step: \`${activeStep}\`
-- Last gate status: \`${gateStatus}\`
-
-## Existing Artifacts
-${artifactLines}
-
-## Open Risks
-${riskLines}
-
-## Notes
-- This file represents current truth and must be updated after each admissible execution step.
-`;
-
-  fs.writeFileSync(realityPath, newContent, "utf-8");
+  fs.writeFileSync(realityPath, next, "utf-8");
   vscode.window.showInformationMessage(
-    `REALITY.md updated: step=${activeStep}, gate=${gateStatus}`
+    `REALITY.md regenerated: step=${activeStep}, ${tracked.length} artifact(s)`
   );
 }

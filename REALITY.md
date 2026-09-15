@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-15`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P39`
-- HEAD at generation: `931d611`
+- Active PATH step: `P46`
+- HEAD at generation: `76eba22`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -34,6 +34,7 @@
 - `scripts/test_decision_log.sh`
 - `scripts/test_extension_parity.mjs`
 - `scripts/test_gate_report.sh`
+- `scripts/test_init_integration.mjs`
 - `scripts/test_path_scope.sh`
 - `scripts/test_reality_gen.sh`
 - `scripts/test_shard_store.sh`
@@ -47,6 +48,7 @@
 - `trace/2026-09-15-decisions-log.md`
 - `trace/2026-09-15-generated-reality.md`
 - `trace/2026-09-15-reality-working-tree.md`
+- `trace/2026-09-15-review-findings-pr6.md`
 - `trace/2026-09-15-scope-enforcement.md`
 - `trace/2026-09-15-shard-records.md`
 - `trace/2026-09-15-trace-append-only.md`
@@ -72,6 +74,12 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- Five review findings on pull request #6, all verified and fixed. The most
+  serious: an unresolvable diff base made every check pass vacuously.
+- The parity suite compared helpers, not workflows. An init integration test now
+  scaffolds a workspace as the extension does and runs the shell gate on it; it
+  found a sixth defect on its first run.
+
 - The CI workflow wrote its report into the checkout, so the gates saw an
   untracked out-of-scope file and failed the workflow on its own first run. It
   now writes to the runner temp directory. Third instance of the same mistake,

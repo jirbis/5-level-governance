@@ -82,12 +82,26 @@ function git(root: string, args: string[]): string | null {
   }
 }
 
-function diffBase(root: string): string {
+function baseResolves(root: string, base: string): boolean {
+  return (
+    base.length > 0 &&
+    git(root, ["rev-parse", "--verify", "--quiet", `${base}^{commit}`]) !== null
+  );
+}
+
+/**
+ * Returns null when a configured base cannot be resolved.
+ *
+ * An unresolvable base makes every `git diff` fail, and a failed diff looks
+ * exactly like an empty one: no changed files, nothing out of scope, nothing to
+ * check. The whole gate then passes vacuously, which is worse than failing.
+ */
+function diffBase(root: string): string | null {
   const configured = vscode.workspace
     .getConfiguration("governance")
     .get<string>("diffBase");
   if (configured) {
-    return configured;
+    return baseResolves(root, configured) ? configured : null;
   }
   for (const ref of ["origin/HEAD", "origin/main", "origin/master", "main", "master"]) {
     if (git(root, ["rev-parse", "--verify", "--quiet", ref]) === null) {
@@ -173,6 +187,17 @@ function checkPathScope(root: string): Check[] {
 
   const effective = [...allowed, ...IMPLICIT_ALLOWED_PATHS];
   const base = diffBase(root);
+  if (base === null) {
+    return [
+      {
+        pass: false,
+        message:
+          "PATH scope: the configured governance.diffBase is not a commit this " +
+          "repository can resolve; scope cannot be verified",
+        file: "PATH.md",
+      },
+    ];
+  }
   const changed = changedFiles(root, base);
 
   if (changed.length === 0) {
@@ -267,6 +292,15 @@ function checkShardImmutability(root: string, dir: string, label: string): Check
   }
 
   const base = diffBase(root);
+  if (base === null) {
+    return [
+      {
+        pass: false,
+        message: `${label} append-only: the configured governance.diffBase is not a commit this repository can resolve`,
+        file: dir,
+      },
+    ];
+  }
   const checks: Check[] = [];
   const protectedShards = shardsAtBase(root, base, dir);
 
@@ -386,6 +420,17 @@ function checkLawAmendmentRecorded(root: string): Check[] {
   }
 
   const base = diffBase(root);
+  if (base === null) {
+    return [
+      {
+        pass: false,
+        message:
+          "DECISIONS: the configured governance.diffBase is not a commit this " +
+          "repository can resolve; policy changes cannot be verified",
+        file: dir,
+      },
+    ];
+  }
   if (!changedFiles(root, base).includes(target)) {
     return [
       {

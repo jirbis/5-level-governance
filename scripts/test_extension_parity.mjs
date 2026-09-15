@@ -34,7 +34,7 @@ execFileSync("npx", ["esbuild", "src/traceRules.ts", "--format=esm", "--bundle",
 
 const { pathMatchesGlob, parsePathMd } = await import(bundle);
 const { hasApprovedEntry } = await import(traceBundle);
-const { realityStaleness } = await import(realityBundle);
+const { realityStaleness, renderReality, artifactLines } = await import(realityBundle);
 const { shardSlug, immutabilityViolation, isEntry, statesGateEvidence } = await import(shardBundle);
 
 const cases = [
@@ -241,6 +241,70 @@ for (const [text, want] of [
   } else {
     console.log(`  FAIL evidence ${JSON.stringify(text)} -> ${!want}`);
     fails++;
+  }
+}
+
+// Above the file-count threshold the shell generator collapses to directory
+// counts. The extension must collapse identically, or a freshly generated
+// REALITY passes one gate and fails the other.
+{
+  const many = [];
+  for (let i = 0; i < 12; i++) many.push(`many/f${i}.txt`);
+  many.push("top.txt");
+
+  const dir = mkdtempSync(path.join(tmpdir(), "limit-"));
+  execFileSync("git", ["-C", dir, "init", "-q"]);
+  execFileSync("git", ["-C", dir, "config", "user.email", "t@t.t"]);
+  execFileSync("git", ["-C", dir, "config", "user.name", "t"]);
+  for (const f of many) {
+    const full = path.join(dir, f);
+    execFileSync("mkdir", ["-p", path.dirname(full)]);
+    writeFileSync(full, "x");
+  }
+  execFileSync("git", ["-C", dir, "add", "--", ...many]);
+
+  const sh = execFileSync("bash", [
+    "-c",
+    `source "${root}/scripts/reality_gen.sh"; REALITY_FILE_LIMIT=5 reality_artifacts_block "$1" | sed '1d;2d;$d'`,
+    "_",
+    dir,
+  ]).toString().replace(/\n$/, "");
+  const ts = artifactLines(many, 5).join("\n");
+  rmSync(dir, { recursive: true, force: true });
+
+  if (ts === sh) {
+    console.log(`  ok   artifact collapse above the limit matches (both)`);
+  } else {
+    console.log(`  FAIL artifact collapse differs:\n--- ts ---\n${ts}\n--- sh ---\n${sh}`);
+    fails++;
+  }
+}
+
+// renderReality is what the extension's Update REALITY command now uses. It must
+// splice, and it must refuse rather than overwrite a file it cannot splice.
+{
+  const facts = { date: "2026-09-15", workspaceName: "w", activeStep: "P1", headSha: "abc1234", treeState: "clean" };
+  const withMarkers = [
+    "# REALITY", "",
+    "<!-- generated:snapshot -->", "stale", "<!-- /generated:snapshot -->", "",
+    "<!-- generated:artifacts -->", "- `old.txt`", "<!-- /generated:artifacts -->", "",
+    "## Open Risks", "- a hand-written risk", "",
+  ].join("\n");
+
+  const rendered = renderReality(withMarkers, facts, ["a.txt", "b/c.txt"]);
+  const checks = [
+    [rendered !== null, "renders a file that has markers"],
+    [rendered?.includes("- a hand-written risk"), "preserves the hand-written section"],
+    [rendered?.includes("- `a.txt`"), "writes the new artifact list"],
+    [!rendered?.includes("- `old.txt`"), "replaces the stale artifact list"],
+    [!rendered?.includes("stale"), "replaces the stale snapshot"],
+    [rendered?.includes("Active PATH step: `P1`"), "records the active step"],
+    [renderReality("# REALITY\n\n## Hand written\n- content\n", facts, []) === null,
+     "refuses a file with no generated regions instead of overwriting it"],
+  ];
+  for (const [passed, label] of checks) {
+    if (passed) console.log(`  ok   renderReality ${label}`);
+    else { console.log(`  FAIL renderReality ${label}`); fails++; }
   }
 }
 
