@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-15`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P38`
-- HEAD at generation: `07b7878`
+- Active PATH step: `P39`
+- HEAD at generation: `931d611`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -41,6 +41,7 @@
 - `trace/2026-02-18-fix-gate-script.md`
 - `trace/2026-02-18-init.md`
 - `trace/2026-09-15-ci-gate.md`
+- `trace/2026-09-15-ci-report-outside-workspace.md`
 - `trace/2026-09-15-codify-2.md`
 - `trace/2026-09-15-codify.md`
 - `trace/2026-09-15-decisions-log.md`
@@ -71,6 +72,11 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- The CI workflow wrote its report into the checkout, so the gates saw an
+  untracked out-of-scope file and failed the workflow on its own first run. It
+  now writes to the runner temp directory. Third instance of the same mistake,
+  first one caught in production rather than by a test.
+
 - `TRACE.md` and `DECISIONS.md` are gone, replaced by `trace/` and `decisions/`,
   one file per entry. Append-only became per-file immutability: an entry that
   existed at the base must be byte-identical now, and every commit in the range

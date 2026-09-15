@@ -57,7 +57,13 @@ Two details that decide whether the check means anything:
   branch tip. Changes that landed on the base branch after this one forked are
   not this change's scope.
 
-Render the same report locally with `make report`.
+Render the same report locally with `make report`, which writes to stdout.
+
+If you redirect it to a file, write that file **outside the workspace**. A
+report written into the checkout is an untracked file that exists before the
+gates run, and they will correctly report it as out of scope and as REALITY
+drift — the harness failing the very check it exists to run. This is not
+hypothetical: it is how the workflow's own first run on a pull request failed.
 
 **Fork limitation.** A `pull_request` run from a fork gets a read-only
 `GITHUB_TOKEN`, so the comment step cannot post and is marked

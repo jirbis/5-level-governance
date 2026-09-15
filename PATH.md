@@ -103,9 +103,11 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: GATE.md, README.md, PATH.md
 - [x] `P38` Update REALITY, record the decision, append TRACE.
       allowed_paths: PATH.md, decisions/**, trace/**
+- [x] `P39` Stop the CI workflow writing its report inside the workspace it is checking.
+      allowed_paths: .github/workflows/**, README.md, PATH.md
 
 ## Current Pointer
-- `active_step`: `P38`
+- `active_step`: `P39`
 
 ## Blocking Questions
 - (none)

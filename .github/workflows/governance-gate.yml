@@ -57,11 +57,17 @@ jobs:
         id: report
         env:
           GOVERNANCE_DIFF_BASE: ${{ steps.base.outputs.base }}
+          # Outside the checkout. Redirecting into the workspace would create an
+          # untracked file before the gates run, and they would correctly report
+          # it as out of scope and as REALITY drift - the harness failing the
+          # very check it exists to run.
+          REPORT: ${{ runner.temp }}/governance-report.md
         run: |
           set +e
-          bash ./scripts/gate_report.sh > report.md
+          bash ./scripts/gate_report.sh > "$REPORT"
           echo "rc=$?" >> "$GITHUB_OUTPUT"
-          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          echo "report=$REPORT" >> "$GITHUB_OUTPUT"
+          cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment on the pull request
         if: github.event_name == 'pull_request'
@@ -70,10 +76,12 @@ jobs:
         # always written, and the verdict step below still fails the run.
         continue-on-error: true
         uses: actions/github-script@v7
+        env:
+          REPORT_PATH: ${{ steps.report.outputs.report }}
         with:
           script: |
             const fs = require('fs');
-            const body = fs.readFileSync('report.md', 'utf8');
+            const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
             const marker = '<!-- governance-gate -->';
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
