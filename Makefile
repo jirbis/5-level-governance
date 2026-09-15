@@ -15,4 +15,5 @@ gate2:
 test:
 	bash ./scripts/test_path_scope.sh
 	bash ./scripts/test_trace_append_only.sh
+	bash ./scripts/test_decision_log.sh
 	node ./scripts/test_extension_parity.mjs

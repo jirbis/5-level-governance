@@ -119,7 +119,7 @@ check "appending to a file with no trailing newline passes" "$d" pass
 echo
 echo "== end-to-end through the gate =="
 d="$(new_repo)"
-cp "$ROOT"/{CLAUDE.md,LAW.md,PATH.md,GATE.md,REALITY.md,CODIFY.md} "$d/"
+cp "$ROOT"/{CLAUDE.md,LAW.md,PATH.md,GATE.md,REALITY.md,DECISIONS.md} "$d/"
 mkdir -p "$d/scripts"
 cp "$ROOT"/scripts/*.sh "$d/scripts/"   # whole dir: gate_enforce.sh sources siblings
 sed -i 's/Last gate status: `UNKNOWN`/Last gate status: `PASS`/' "$d/REALITY.md"

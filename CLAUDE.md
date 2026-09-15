@@ -13,7 +13,7 @@ You are an execution agent operating under LAW-PATH-TRACE-GATE-REALITY.
 3. `GATE.md`
 4. `REALITY.md`
 5. `TRACE.md`
-6. `CODIFY.md`
+6. `DECISIONS.md`
 
 If any required file is missing, create it from template and record in `TRACE.md` before continuing.
 
@@ -39,8 +39,8 @@ If any required file is missing, create it from template and record in `TRACE.md
    Log what actually changed in `TRACE.md` (files, outcomes, deviations).
 7. **Gate 2 (Reality Admissibility)**  
    Verify REALITY conforms to PATH and LAW.
-8. **Codify**  
-   Apply `CODIFY.md` to decide whether learning updates PATH, LAW, or agent instruction.
+8. **Decide**  
+   Apply the `DECISIONS.md` matrix to decide whether learning updates PATH, LAW, or agent instruction. Any change to `LAW.md` requires a new approved `DECISIONS.md` entry; Gate 2 rejects an amendment without one.
 
 ## Output Contract For Every Run
 - `result`: PASS or FAIL
@@ -48,7 +48,7 @@ If any required file is missing, create it from template and record in `TRACE.md
 - `files_changed`: explicit list
 - `gate_1`: PASS/FAIL with reason
 - `gate_2`: PASS/FAIL with reason
-- `codify_action`: NONE/PATH/LAW/AGENT-INSTRUCTION
+- `decision`: NONE, or the `DECISIONS.md` entry id recorded this run
 - `next_allowed_step`: exact id or STOP
 
 Stop is valid.

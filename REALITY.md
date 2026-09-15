@@ -3,7 +3,7 @@
 ## Current State Snapshot
 - Date: `2026-09-15`
 - Workspace root: `5-level-governance` (repository root; previously pinned to a stale absolute path)
-- Active PATH step: `P12`
+- Active PATH step: `P18`
 - Last gate status: `PASS`
 
 ## Existing Artifacts
@@ -14,13 +14,15 @@
 - `GATE.md`
 - `REALITY.md`
 - `TRACE.md`
-- `CODIFY.md`
+- `DECISIONS.md`
 - `Makefile`
 - `scripts/gate_enforce.sh`
 - `scripts/path_scope.sh`
 - `scripts/trace_append_only.sh`
+- `scripts/decision_log.sh`
 - `scripts/test_path_scope.sh`
 - `scripts/test_trace_append_only.sh`
+- `scripts/test_decision_log.sh`
 - `scripts/test_extension_parity.mjs`
 - `.github/workflows/build-vsix.yml`
 - `vscode-extension/package.json`
@@ -36,6 +38,19 @@
 - `vscode-extension/src/wizard.ts`
 
 ## Deltas This Run
+- `CODIFY.md` is gone, replaced by `DECISIONS.md`: an append-only record of rule
+  changes rather than a procedure document. It was the only canon artifact with
+  no mechanical check, and the single decision it produced targeted itself.
+- Gate 2 now enforces two things about it: the log is append-only, and any change
+  to `LAW.md` requires a newly appended entry naming it with a recorded
+  `approved_by`. A pre-existing entry does not justify a later amendment.
+- `LAW.md` was amended under that rule, with `DECISIONS.md` D1 and D2 as the
+  recorded approvals: declared scope and recorded rule changes are now
+  Non-Negotiables, and amending `LAW.md` without an approved entry is Forbidden.
+- Gate 2 caught the stale `CODIFY.md` entry in this file during the rename,
+  which is the artifact list drifting exactly as the open risk predicted.
+
+## Deltas From The Run Before Last
 - Gate 2 now verifies that `TRACE.md` only grows: every version must have the
   previous version as an exact byte prefix. The whole commit chain is walked,
   then the working tree, so a rewrite that is later restored is still caught.
@@ -58,6 +73,9 @@
   the whole `vscode-extension/` tree existed on disk but were unrecorded.
 
 ## Open Risks
+- The approval check verifies that an approval is recorded, not that it was
+  given. Binding `approved_by` to a real identity needs signed commits or a
+  reviewed pull request. It is tamper-evidence, not authentication.
 - REALITY is still hand-maintained, so the artifact list can drift again. It
   should be generated from the tree rather than written.
 - Gate checks still do not consult the project's own test or build exit codes.

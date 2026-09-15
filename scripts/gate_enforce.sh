@@ -8,6 +8,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/path_scope.sh"
 # shellcheck source=scripts/trace_append_only.sh
 source "$ROOT/scripts/trace_append_only.sh"
+# shellcheck source=scripts/decision_log.sh
+source "$ROOT/scripts/decision_log.sh"
 
 fail_count=0
 
@@ -36,7 +38,7 @@ check_required_files() {
   require_file "GATE.md"
   require_file "REALITY.md"
   require_file "TRACE.md"
-  require_file "CODIFY.md"
+  require_file "DECISIONS.md"
 }
 
 run_gate1() {
@@ -165,37 +167,59 @@ check_path_scope() {
   fi
 }
 
-check_trace_append_only() {
+# Both TRACE.md and DECISIONS.md are append-only records: one of work, one of
+# rule changes. They share the prefix rule.
+check_append_only() {
+  local rel="$1" label="$2"
+
   if ! command -v git >/dev/null 2>&1; then
-    fail "TRACE append-only: git is unavailable, history cannot be verified"
+    fail "$label append-only: git is unavailable, history cannot be verified"
     return
   fi
   if ! git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    fail "TRACE append-only: not a git repository, history cannot be verified"
+    fail "$label append-only: not a git repository, history cannot be verified"
     return
   fi
 
   local base violations
   base="$(scope_diff_base "$ROOT")"
 
-  if violations="$(trace_verify_append_only "$ROOT" "$base")"; then
-    pass "TRACE.md is append-only against ${base:0:12}"
+  if violations="$(trace_verify_append_only "$ROOT" "$base" "$rel")"; then
+    pass "$rel is append-only against ${base:0:12}"
     return
   fi
 
   local line
   while IFS= read -r line; do
     if [[ -n "$line" ]]; then
-      fail "TRACE append-only: $line"
+      fail "$label append-only: $line"
     fi
   done <<< "$violations"
+}
+
+check_law_amendment_recorded() {
+  if ! git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    fail "DECISIONS: not a git repository, policy changes cannot be verified"
+    return
+  fi
+
+  local base reason
+  base="$(scope_diff_base "$ROOT")"
+
+  if reason="$(decisions_check_law_amendment "$ROOT" "$base")"; then
+    pass "DECISIONS: $reason against ${base:0:12}"
+    return
+  fi
+  fail "DECISIONS: $reason"
 }
 
 run_gate2() {
   echo "== Gate 2: REALITY Admissibility =="
   check_required_files
   check_path_scope
-  check_trace_append_only
+  check_append_only "TRACE.md" "TRACE"
+  check_append_only "DECISIONS.md" "DECISIONS"
+  check_law_amendment_recorded
 
   if rg -n 'Last gate status: `UNKNOWN`' "$ROOT/REALITY.md" >/dev/null; then
     fail "REALITY.md still has unknown gate status"

@@ -8,7 +8,7 @@ import {
   parsePathMd,
   pathMatchesGlob,
 } from "./parsers";
-import { prefixViolation } from "./traceRules";
+import { hasApprovedEntry, prefixViolation } from "./traceRules";
 
 export interface Check {
   pass: boolean;
@@ -245,14 +245,14 @@ function traceAt(root: string, rev: string, rel: string): Buffer {
   }
 }
 
-function checkTraceAppendOnly(root: string): Check[] {
-  const rel = "TRACE.md";
-
+// TRACE.md and DECISIONS.md are both append-only records: one of work, one of
+// rule changes. They share the prefix rule.
+function checkAppendOnly(root: string, rel: string, label: string): Check[] {
   if (git(root, ["rev-parse", "--is-inside-work-tree"]) === null) {
     return [
       {
         pass: false,
-        message: "TRACE append-only: not a git repository, history cannot be verified",
+        message: `${label} append-only: not a git repository, history cannot be verified`,
         file: rel,
       },
     ];
@@ -274,7 +274,7 @@ function checkTraceAppendOnly(root: string): Check[] {
       const short = (git(root, ["rev-parse", "--short", rev]) ?? rev).trim();
       checks.push({
         pass: false,
-        message: `TRACE append-only: commit ${short} rewrites ${rel} history (${violation})`,
+        message: `${label} append-only: commit ${short} rewrites ${rel} history (${violation})`,
         file: rel,
       });
     }
@@ -288,7 +288,7 @@ function checkTraceAppendOnly(root: string): Check[] {
   if (violation) {
     checks.push({
       pass: false,
-      message: `TRACE append-only: working tree rewrites ${rel} history (${violation})`,
+      message: `${label} append-only: working tree rewrites ${rel} history (${violation})`,
       file: rel,
     });
   }
@@ -296,11 +296,76 @@ function checkTraceAppendOnly(root: string): Check[] {
   if (checks.length === 0) {
     checks.push({
       pass: true,
-      message: `TRACE.md is append-only against ${base.slice(0, 12)}`,
+      message: `${rel} is append-only against ${base.slice(0, 12)}`,
       file: rel,
     });
   }
   return checks;
+}
+
+/**
+ * Policy may not change without a recorded approval: any change to LAW.md must
+ * come with a new approved entry in the append-only decision log.
+ */
+function checkLawAmendmentRecorded(root: string): Check[] {
+  const rel = "DECISIONS.md";
+  const target = "LAW.md";
+
+  if (git(root, ["rev-parse", "--is-inside-work-tree"]) === null) {
+    return [
+      {
+        pass: false,
+        message: "DECISIONS: not a git repository, policy changes cannot be verified",
+        file: rel,
+      },
+    ];
+  }
+
+  const base = diffBase(root);
+  if (!changedFiles(root, base).includes(target)) {
+    return [
+      {
+        pass: true,
+        message: `DECISIONS: no unrecorded policy change against ${base.slice(0, 12)}`,
+        file: rel,
+      },
+    ];
+  }
+
+  const full = path.join(root, rel);
+  if (!fs.existsSync(full)) {
+    return [
+      {
+        pass: false,
+        message: `DECISIONS: ${target} changed but ${rel} does not exist`,
+        file: target,
+      },
+    ];
+  }
+
+  // Append-only is verified separately, so everything past the old length is
+  // by definition the newly appended material.
+  const oldLength = traceAt(root, base, rel).length;
+  const appended = fs.readFileSync(full).subarray(oldLength).toString("utf-8");
+
+  if (hasApprovedEntry(appended, target)) {
+    return [
+      {
+        pass: true,
+        message: `DECISIONS: policy change recorded and approved against ${base.slice(0, 12)}`,
+        file: rel,
+      },
+    ];
+  }
+  return [
+    {
+      pass: false,
+      message:
+        `DECISIONS: ${target} changed with no new ${rel} entry naming it and ` +
+        "carrying a recorded approved_by",
+      file: rel,
+    },
+  ];
 }
 
 export function runGate1(): GateResult {
@@ -440,8 +505,12 @@ export function runGate2(): GateResult {
   // Bind the declared PATH scope to the real git diff
   checks.push(...checkPathScope(root));
 
-  // The recorded route may only grow
-  checks.push(...checkTraceAppendOnly(root));
+  // The recorded route and the record of rule changes may only grow
+  checks.push(...checkAppendOnly(root, "TRACE.md", "TRACE"));
+  checks.push(...checkAppendOnly(root, "DECISIONS.md", "DECISIONS"));
+
+  // Policy may not change without a recorded approval
+  checks.push(...checkLawAmendmentRecorded(root));
 
   // Check REALITY.md gate status is not UNKNOWN
   const realityContent = readFile(root, "REALITY.md");

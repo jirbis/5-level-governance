@@ -21,7 +21,7 @@ execFileSync("npx", ["esbuild", "src/traceRules.ts", "--format=esm", "--bundle",
 });
 
 const { pathMatchesGlob, parsePathMd } = await import(bundle);
-const { prefixViolation } = await import(traceBundle);
+const { prefixViolation, hasApprovedEntry } = await import(traceBundle);
 
 const cases = [
   ["scripts/gate_enforce.sh", "scripts/**"],
@@ -115,6 +115,40 @@ for (const [prev, next, want] of traceCases) {
     console.log(`  ok   trace ${JSON.stringify(prev)} -> ${JSON.stringify(next)} = ${want} :: ${shOut}`);
   } else {
     console.log(`  FAIL trace ${JSON.stringify(prev)} -> ${JSON.stringify(next)}: ts="${tsMsg}" sh="${shOut}" want=${want}`);
+    fails++;
+  }
+}
+
+// DECISIONS: the approval rule must read identically in both runtimes.
+const entry = (target, approver) =>
+  `\n### D9 — 2026-02-02 — t\n- \`type\`: ARCHITECTURAL\n- \`target_file\`: \`${target}\`\n- \`approved_by\`: ${approver}\n`;
+
+const decisionCases = [
+  ["approved LAW entry", entry("LAW.md", "a@b.c"), true],
+  ["empty approval", entry("LAW.md", ""), false],
+  ["placeholder approval", entry("LAW.md", "<who>"), false],
+  ["TBD approval", entry("LAW.md", "TBD"), false],
+  ["approved entry about another file", entry("CLAUDE.md", "a@b.c"), false],
+  ["nothing appended", "", false],
+  ["target and approval in different entries", entry("LAW.md", "") + entry("README.md", "a@b.c"), false],
+];
+
+for (const [label, section, want] of decisionCases) {
+  const ts = hasApprovedEntry(section, "LAW.md");
+  const dir = mkdtempSync(path.join(tmpdir(), "dec-"));
+  writeFileSync(path.join(dir, "section"), section);
+  const sh = execFileSync("bash", [
+    "-c",
+    `source "${root}/scripts/decision_log.sh"; _decisions_has_approved_entry LAW.md < "$1/section"`,
+    "_",
+    dir,
+  ]).toString().trim() === "OK";
+  rmSync(dir, { recursive: true, force: true });
+
+  if (ts === sh && ts === want) {
+    console.log(`  ok   decisions ${label} -> ${want} (both)`);
+  } else {
+    console.log(`  FAIL decisions ${label}: ts=${ts} sh=${sh} want=${want}`);
     fails++;
   }
 }

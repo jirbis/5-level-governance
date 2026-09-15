@@ -51,9 +51,21 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: GATE.md, README.md, PATH.md
 - [x] `P12` Update REALITY, append TRACE, run Gate 2 and apply CODIFY.
       allowed_paths: PATH.md, CODIFY.md
+- [x] `P13` Declare scope for turning CODIFY into an enforced policy change log.
+      allowed_paths: PATH.md
+- [x] `P14` Replace `CODIFY.md` with append-only `DECISIONS.md` and record the approved LAW amendment as its first entry.
+      allowed_paths: DECISIONS.md, CODIFY.md, LAW.md, CLAUDE.md, PATH.md
+- [x] `P15` Enforce the log in Gate 2: DECISIONS is append-only, and a change to LAW.md requires a new approved entry.
+      allowed_paths: scripts/**, Makefile, PATH.md
+- [x] `P16` Mirror the enforcement in the VS Code extension and its emitted templates.
+      allowed_paths: vscode-extension/src/*.ts, PATH.md
+- [x] `P17` Document the artifact and the criterion.
+      allowed_paths: GATE.md, README.md, PATH.md
+- [x] `P18` Update REALITY, append TRACE, run Gate 2.
+      allowed_paths: PATH.md, DECISIONS.md
 
 ## Current Pointer
-- `active_step`: `P12`
+- `active_step`: `P18`
 
 ## Blocking Questions
 - (none)
@@ -63,3 +75,4 @@ Each step may declare the file scope it is permitted to touch:
 - Gate 1 and Gate 2 are both PASS for the final state.
 - Gate 2 rejects a change that touches a file outside the active step's `allowed_paths`.
 - Gate 2 rejects any history rewrite of `TRACE.md`: the recorded route may only grow.
+- Gate 2 rejects a change to `LAW.md` that carries no new approved `DECISIONS.md` entry.

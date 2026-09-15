@@ -11,7 +11,7 @@ It implements the LAW-PATH-TRACE-GATE-REALITY discipline as a strict artifact wo
 - `GATE.md`: admissibility checks (before work and before done).
 - `REALITY.md`: current state of repo/artifacts.
 - `TRACE.md`: append-only execution evidence.
-- `CODIFY.md`: update policy for improving LAW/PATH/agent behavior.
+- `DECISIONS.md`: append-only record of changes to the rules, with approvals.
 
 ## 7-Step Combined Loop
 1. Validate against `LAW.md`.
@@ -20,7 +20,7 @@ It implements the LAW-PATH-TRACE-GATE-REALITY discipline as a strict artifact wo
 4. Execute work and update `REALITY.md`.
 5. Append actual changes to `TRACE.md`.
 6. Run Gate 2 (REALITY admissibility).
-7. Codify learning in `PATH.md`, `LAW.md`, or agent instructions.
+7. Record any rule change in `DECISIONS.md` with an approval.
 
 ## Usage
 1. Open this folder as the working context.
@@ -96,4 +96,40 @@ rewrites TRACE in one commit and restores it in the next has still destroyed
 the trail, and an endpoint comparison would report it clean.
 
 Creating `TRACE.md` where none existed is admissible — the empty prefix is a
-prefix of anything.
+prefix of anything. `DECISIONS.md` is held to the same rule.
+
+## Policy Change Control
+
+`LAW.md` is the policy, and it may not change without a recorded approval.
+`TRACE.md` records what the work did; `DECISIONS.md` records what changed the
+rules that govern the work.
+
+If a diff touches `LAW.md`, Gate 2 requires a newly appended entry naming it:
+
+```markdown
+### D1 — 2026-09-15 — Declared scope is a precondition of admissibility
+- `type`: ARCHITECTURAL
+- `target_file`: `LAW.md`
+- `change`: added the Non-Negotiable "No change is admissible outside a scope
+  declared in `PATH.md`".
+- `evidence`: TRACE 2026-09-15 SCOPE ENFORCEMENT
+- `approved_by`: someone@example.com
+- `approved_at`: 2026-09-15
+```
+
+Otherwise:
+
+```
+FAIL: DECISIONS: LAW.md changed with no new DECISIONS.md entry naming it
+      and carrying a recorded approved_by
+```
+
+A pre-existing entry does not justify a later amendment, the target and the
+approval must be in the same entry, and an `approved_by` that is empty, a
+placeholder or `TBD` is not an approval.
+
+**What this cannot do.** It verifies that an approval is *recorded*, not that it
+was *given* — nothing inside a file can prove who wrote it. Binding `approved_by`
+to a real identity needs signed commits or a reviewed pull request, which is a
+property of the repository rather than of the canon. It is tamper-evidence, not
+authentication.
