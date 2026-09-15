@@ -1,0 +1,107 @@
+name: Governance Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: governance-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Gate 2 diffs the change set against the merge-base, so the gate is
+          # only as good as the history available to it. A shallow clone would
+          # silently leave it with nothing to compare.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install extension dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: vscode-extension
+
+      - name: Resolve diff base
+        id: base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${BASE_REF:-}" ]]; then
+            # The merge-base, not the base branch tip: changes that landed on the
+            # base branch after this one forked are not this change's scope.
+            git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+            base="$(git merge-base "origin/$BASE_REF" HEAD)"
+          else
+            # push or manual run: compare against the commit before this one
+            base="$(git rev-parse 'HEAD^' 2>/dev/null || git rev-parse HEAD)"
+          fi
+          echo "Diffing against $base"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Run gates and render report
+        id: report
+        env:
+          GOVERNANCE_DIFF_BASE: ${{ steps.base.outputs.base }}
+        run: |
+          set +e
+          bash ./scripts/gate_report.sh > report.md
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        # A pull_request run from a fork gets a read-only token, so commenting
+        # fails there through no fault of the change. The job summary above is
+        # always written, and the verdict step below still fails the run.
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('report.md', 'utf8');
+            const marker = '<!-- governance-gate -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const existing = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            // Update in place so a busy pull request does not collect one
+            // comment per push.
+            const mine = existing.find(
+              (c) => c.user.type === 'Bot' && c.body && c.body.includes(marker)
+            );
+
+            if (mine) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: mine.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body,
+              });
+            }
+
+      - name: Verdict
+        run: |
+          if [[ "${{ steps.report.outputs.rc }}" != "0" ]]; then
+            echo "::error::Governance gate failed. See the job summary or the pull request comment."
+            exit 1
+          fi
+          echo "Governance gate passed."

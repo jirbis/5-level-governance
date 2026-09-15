@@ -45,20 +45,20 @@ run_gate1() {
   echo "== Gate 1: PATH Admissibility =="
   check_required_files
 
-  if rg -n "<set [^>]+>" "$ROOT/PATH.md" >/dev/null; then
+  if grep -Eq "<set [^>]+>" "$ROOT/PATH.md"; then
     fail "PATH.md still contains placeholder values (<set ...>)"
   else
     pass "PATH.md has no unresolved <set ...> placeholders"
   fi
 
-  if rg -n "active_step" "$ROOT/PATH.md" >/dev/null; then
+  if grep -q "active_step" "$ROOT/PATH.md"; then
     pass "PATH.md declares active_step"
   else
     fail "PATH.md missing active_step"
   fi
 
-  if rg -n "## Blocking Questions" "$ROOT/PATH.md" >/dev/null; then
-    if rg -n "^- \(none\)$" "$ROOT/PATH.md" >/dev/null; then
+  if grep -q "## Blocking Questions" "$ROOT/PATH.md"; then
+    if grep -Eq '^- \(none\)$' "$ROOT/PATH.md"; then
       pass "PATH.md has no blocking questions"
     else
       fail "PATH.md has unresolved blocking questions"
@@ -67,7 +67,7 @@ run_gate1() {
     fail "PATH.md missing Blocking Questions section"
   fi
 
-  if rg -n "## Non-Negotiables" "$ROOT/LAW.md" >/dev/null; then
+  if grep -q "## Non-Negotiables" "$ROOT/LAW.md"; then
     pass "LAW.md contains Non-Negotiables"
   else
     fail "LAW.md missing Non-Negotiables section"
@@ -221,13 +221,13 @@ run_gate2() {
   check_append_only "DECISIONS.md" "DECISIONS"
   check_law_amendment_recorded
 
-  if rg -n 'Last gate status: `UNKNOWN`' "$ROOT/REALITY.md" >/dev/null; then
+  if grep -q 'Last gate status: `UNKNOWN`' "$ROOT/REALITY.md"; then
     fail "REALITY.md still has unknown gate status"
   else
     pass "REALITY.md has a resolved gate status"
   fi
 
-  if rg -n "^- [0-9]{4}-[0-9]{2}-[0-9]{2} .*gate_1=.*gate_2=" "$ROOT/TRACE.md" >/dev/null; then
+  if grep -Eq "^- [0-9]{4}-[0-9]{2}-[0-9]{2} .*gate_1=.*gate_2=" "$ROOT/TRACE.md"; then
     pass "TRACE.md has dated gate evidence with gate_1 and gate_2"
   else
     fail "TRACE.md missing dated gate evidence with gate_1 and gate_2"

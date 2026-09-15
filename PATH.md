@@ -63,9 +63,21 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: GATE.md, README.md, PATH.md
 - [x] `P18` Update REALITY, append TRACE, run Gate 2.
       allowed_paths: PATH.md, DECISIONS.md
+- [x] `P19` Declare scope for running the gates in CI.
+      allowed_paths: PATH.md
+- [x] `P20` Remove the undeclared ripgrep dependency from the shell gate, which would abort the gate in CI rather than report a clean FAIL.
+      allowed_paths: scripts/**, PATH.md
+- [x] `P21` Render gate and test results as a Markdown report, with tests.
+      allowed_paths: scripts/**, Makefile, PATH.md
+- [x] `P22` Add the GitHub Actions workflow that runs the gates and posts the report to the pull request.
+      allowed_paths: .github/workflows/**, PATH.md
+- [x] `P23` Document the workflow and its fork limitation.
+      allowed_paths: README.md, PATH.md
+- [x] `P24` Update REALITY, append TRACE, run Gate 2.
+      allowed_paths: PATH.md, DECISIONS.md
 
 ## Current Pointer
-- `active_step`: `P18`
+- `active_step`: `P24`
 
 ## Blocking Questions
 - (none)

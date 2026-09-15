@@ -3,7 +3,7 @@
 ## Current State Snapshot
 - Date: `2026-09-15`
 - Workspace root: `5-level-governance` (repository root; previously pinned to a stale absolute path)
-- Active PATH step: `P18`
+- Active PATH step: `P24`
 - Last gate status: `PASS`
 
 ## Existing Artifacts
@@ -20,11 +20,14 @@
 - `scripts/path_scope.sh`
 - `scripts/trace_append_only.sh`
 - `scripts/decision_log.sh`
+- `scripts/gate_report.sh`
 - `scripts/test_path_scope.sh`
 - `scripts/test_trace_append_only.sh`
 - `scripts/test_decision_log.sh`
+- `scripts/test_gate_report.sh`
 - `scripts/test_extension_parity.mjs`
 - `.github/workflows/build-vsix.yml`
+- `.github/workflows/governance-gate.yml`
 - `vscode-extension/package.json`
 - `vscode-extension/src/extension.ts`
 - `vscode-extension/src/gates.ts`
@@ -38,6 +41,19 @@
 - `vscode-extension/src/wizard.ts`
 
 ## Deltas This Run
+- The gates now run in CI. `.github/workflows/governance-gate.yml` executes both
+  gates and the test suite on every pull request and posts the verdict as a
+  comment, updated in place rather than appended per push.
+- The report is rendered by `scripts/gate_report.sh` rather than by the workflow
+  YAML, so the rendering is testable; `scripts/test_gate_report.sh` covers the
+  passing verdict, the failing verdict, attribution of a Gate 1 failure to
+  Gate 1, and the presence of the marker the comment updater keys on.
+- The ripgrep dependency is gone from `scripts/gate_enforce.sh`, replaced by
+  `grep`. Under `set -e` a missing `rg` aborted the gate instead of reporting a
+  clean FAIL, which in CI would have looked like a broken job rather than a
+  failed gate.
+
+## Deltas From The Run Before Last
 - `CODIFY.md` is gone, replaced by `DECISIONS.md`: an append-only record of rule
   changes rather than a procedure document. It was the only canon artifact with
   no mechanical check, and the single decision it produced targeted itself.
@@ -73,14 +89,18 @@
   the whole `vscode-extension/` tree existed on disk but were unrecorded.
 
 ## Open Risks
+- The pull request comment cannot be posted from a fork, where the token is
+  read-only. The job summary and the failing verdict still apply, but a fork
+  contributor sees no comment.
+- The `push` run on `main` diffs against the previous commit, so it assumes the
+  merged `PATH.md` still describes the work that produced that commit. A stale
+  PATH on `main` would show as a scope failure there.
 - The approval check verifies that an approval is recorded, not that it was
   given. Binding `approved_by` to a real identity needs signed commits or a
   reviewed pull request. It is tamper-evidence, not authentication.
 - REALITY is still hand-maintained, so the artifact list can drift again. It
   should be generated from the tree rather than written.
 - Gate checks still do not consult the project's own test or build exit codes.
-- `scripts/gate_enforce.sh` depends on `rg` being installed; absence of
-  ripgrep aborts the gate under `set -e` rather than reporting a clean FAIL.
 - A single `TRACE.md` file will conflict under parallel agents or branches.
 
 ## Notes

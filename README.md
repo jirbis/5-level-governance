@@ -29,11 +29,51 @@ It implements the LAW-PATH-TRACE-GATE-REALITY discipline as a strict artifact wo
 
 Rule: if it is not written in `LAW.md`, `PATH.md`, `GATE.md`, `REALITY.md`, or `TRACE.md`, it does not exist.
 
+## Continuous Integration
+
+`.github/workflows/governance-gate.yml` runs both gates and the test suite on
+every pull request and posts the verdict as a comment, updating it in place so a
+busy pull request does not collect one comment per push:
+
+> ## 🟢 Governance Gate — PASS
+>
+> | Check | Result |
+> | --- | --- |
+> | Gate 1 · PATH admissibility | ✅ PASS |
+> | Gate 2 · REALITY admissibility | ✅ PASS |
+> | Tests | ✅ PASS |
+>
+> Active step `P24` · diffed against `e3e9438756e1` · 25 passed, 0 failed
+
+On failure the comment leads with the blockers — the out-of-scope path, the
+rewritten TRACE entry, the unrecorded policy change — and the job fails.
+
+Two details that decide whether the check means anything:
+
+- The workflow checks out with `fetch-depth: 0`. Gate 2 diffs against the
+  merge-base, so a shallow clone would leave it with nothing to compare and the
+  scope check would pass vacuously.
+- It diffs against the **merge-base** with the target branch, not the base
+  branch tip. Changes that landed on the base branch after this one forked are
+  not this change's scope.
+
+Render the same report locally with `make report`.
+
+**Fork limitation.** A `pull_request` run from a fork gets a read-only
+`GITHUB_TOKEN`, so the comment step cannot post and is marked
+`continue-on-error`. The report is always written to the job summary, and the
+verdict step still fails the run, so the gate is never silently skipped. If you
+need comments on fork pull requests, split the workflow: run the gates on
+`pull_request` and upload the report as an artifact, then post it from a
+separate `workflow_run` workflow that has write permission. Do not reach for
+`pull_request_target` — it runs with a writable token against untrusted code.
+
 ## Gate Enforcement Command
 - Run all checks: `make gate`
 - Run Gate 1 only: `make gate1`
 - Run Gate 2 only: `make gate2`
 - Run the test suite: `make test`
+- Render the Markdown report: `make report`
 - Direct script usage: `bash ./scripts/gate_enforce.sh [gate1|gate2|all]`
 
 ## Scope Enforcement
