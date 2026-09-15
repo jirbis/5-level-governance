@@ -9,7 +9,7 @@ import {
   pathMatchesGlob,
 } from "./parsers";
 import { hasApprovedEntry } from "./traceRules";
-import { realityStaleness } from "./realityRules";
+import { realityFileLimit, realityStaleness } from "./realityRules";
 import { immutabilityViolation, isEntry, statesGateEvidence } from "./shardRules";
 
 export interface Check {
@@ -672,7 +672,10 @@ export function runGate2(): GateResult {
           .filter((f) => f.length > 0)
       ),
     ].sort();
-    const staleness = realityStaleness(realityContent, tracked);
+    const limit = vscode.workspace
+      .getConfiguration("governance")
+      .get<number>("realityFileLimit");
+    const staleness = realityStaleness(realityContent, tracked, realityFileLimit(limit));
     if (staleness.stale) {
       const loc = findLineNumber(realityContent, /generated:artifacts/);
       checks.push({

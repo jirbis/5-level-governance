@@ -18,9 +18,16 @@ gate_rc=$?
 
 tests_out=""
 tests_rc=0
+have_tests=0
 if (( RUN_TESTS == 1 )); then
-  tests_out="$(make -C "$ROOT" test 2>&1)"
-  tests_rc=$?
+  # An installed workspace has no `test` target until the project adds one.
+  # Reporting FAIL for tests that were never configured would teach people to
+  # ignore the verdict.
+  if make -C "$ROOT" -n test >/dev/null 2>&1; then
+    have_tests=1
+    tests_out="$(make -C "$ROOT" test 2>&1)"
+    tests_rc=$?
+  fi
 fi
 
 fails="$(grep '^FAIL: ' <<<"$gate_out" || true)"
@@ -53,7 +60,9 @@ printf '| Check | Result |\n| --- | --- |\n'
 printf '| Gate 1 · PATH admissibility | %s |\n' "$(verdict "$gate1_out")"
 printf '| Gate 2 · REALITY admissibility | %s |\n' "$(verdict "$gate2_out")"
 if (( RUN_TESTS == 1 )); then
-  if (( tests_rc == 0 )); then
+  if (( have_tests == 0 )); then
+    printf '| Tests | — not configured |\n'
+  elif (( tests_rc == 0 )); then
     printf '| Tests | ✅ PASS |\n'
   else
     printf '| Tests | ❌ FAIL |\n'
@@ -81,7 +90,7 @@ fi
 
 printf '<details><summary>Full gate output</summary>\n\n```\n%s\n```\n\n</details>\n' "$gate_out"
 
-if (( RUN_TESTS == 1 )) && [[ -n "$tests_out" ]]; then
+if (( RUN_TESTS == 1 )) && (( have_tests == 1 )) && [[ -n "$tests_out" ]]; then
   printf '\n<details><summary>Test output</summary>\n\n```\n%s\n```\n\n</details>\n' \
     "$(grep -E '^(  (ok|FAIL) |.*(tests|parity): )' <<<"$tests_out" || printf '%s' "$tests_out")"
 fi

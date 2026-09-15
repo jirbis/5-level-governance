@@ -119,9 +119,25 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: scripts/**, vscode-extension/src/*.ts, PATH.md
 - [x] `P46` Update REALITY, record the fixes, run Gate 2.
       allowed_paths: PATH.md, trace/**
+- [x] `P47` Declare scope for the install path.
+      allowed_paths: PATH.md
+- [x] `P48` Make the gate report tolerate a project with no `test` target, so an installed workspace is not reported FAIL for tests it never had.
+      allowed_paths: scripts/**, PATH.md
+- [x] `P49` Add `scripts/install.sh` and a `make install` target that put governance into another repository without overwriting anything.
+      allowed_paths: scripts/**, Makefile, PATH.md
+- [x] `P50` Test the installer end to end: an installed workspace must pass Gate 2.
+      allowed_paths: scripts/**, Makefile, PATH.md
+- [x] `P51` Document installation.
+      allowed_paths: README.md, PATH.md
+- [x] `P52` Generate REALITY at init from the same git listing the gate reads, instead of a hand-passed file list that misses nested files.
+      allowed_paths: vscode-extension/src/*.ts, scripts/**, PATH.md
+- [x] `P53` Honour a non-default file-count limit in the extension, as the shell already does.
+      allowed_paths: vscode-extension/src/*.ts, vscode-extension/package.json, scripts/**, PATH.md
+- [x] `P54` Update REALITY, record the work, run Gate 2.
+      allowed_paths: PATH.md, trace/**
 
 ## Current Pointer
-- `active_step`: `P46`
+- `active_step`: `P54`
 
 ## Blocking Questions
 - (none)

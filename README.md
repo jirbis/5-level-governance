@@ -22,7 +22,54 @@ It implements the LAW-PATH-TRACE-GATE-REALITY discipline as a strict artifact wo
 6. Run Gate 2 (REALITY admissibility).
 7. Record any rule change as a new file under `decisions/` with an approval.
 
-## Usage
+## Install Into Your Project
+
+```bash
+git clone https://github.com/jirbis/5-level-governance
+bash 5-level-governance/scripts/install.sh /path/to/your/project --with-ci
+```
+
+That writes the canon files, the `trace/` and `decisions/` records, the gate
+runtime under `scripts/`, and `governance.mk`. With `--with-ci` it also installs
+the GitHub Actions workflow.
+
+**Nothing is overwritten.** An existing file is left alone and reported as
+skipped, so re-running the installer to pick up a newer gate cannot destroy your
+records or your notes. If you already have a `Makefile`, yours is untouched and
+you add one line to it:
+
+```make
+include governance.mk
+```
+
+Then:
+
+1. Fill in the Active Scope and the per-step `allowed_paths` in `PATH.md`.
+2. Run `make gate`. **Gate 1 fails until the `<set ...>` placeholders are
+   gone** — an installed but unconfigured workspace is not admissible, and
+   saying so is the point.
+3. Load `CLAUDE.md` as your agent's instructions.
+
+`make report` renders the same verdict CI posts. A project with no `test` target
+is reported as *not configured* rather than failed; add one and it is run.
+
+## Daily Use
+
+You write `PATH.md`. Everything else is generated or checked.
+
+| Command | When |
+| --- | --- |
+| `make gate` | before committing |
+| `make reality` | after adding or removing files |
+| `make trace` | read the execution record in order |
+| `make decisions` | read the record of rule changes |
+| `make report` | the verdict as Markdown |
+
+What an agent cannot do quietly: touch a file outside `allowed_paths`, edit a
+past `trace/` entry, change `LAW.md` without an approved `decisions/` entry, or
+leave `REALITY.md` disagreeing with the tree.
+
+## Usage In This Repository
 1. Open this folder as the working context.
 2. Load `CLAUDE.md` as your runtime instruction.
 3. Keep all state transitions in files, not chat.

@@ -34,7 +34,7 @@ execFileSync("npx", ["esbuild", "src/traceRules.ts", "--format=esm", "--bundle",
 
 const { pathMatchesGlob, parsePathMd } = await import(bundle);
 const { hasApprovedEntry } = await import(traceBundle);
-const { realityStaleness, renderReality, artifactLines } = await import(realityBundle);
+const { realityStaleness, renderReality, artifactLines, realityFileLimit } = await import(realityBundle);
 const { shardSlug, immutabilityViolation, isEntry, statesGateEvidence } = await import(shardBundle);
 
 const cases = [
@@ -270,6 +270,25 @@ for (const [text, want] of [
     dir,
   ]).toString().replace(/\n$/, "");
   const ts = artifactLines(many, 5).join("\n");
+
+  // The shell reads REALITY_FILE_LIMIT from the environment; the extension must
+  // resolve the same way, or a limit honoured by the generator is ignored by the
+  // checker.
+  process.env.REALITY_FILE_LIMIT = "5";
+  const resolved = realityFileLimit(undefined);
+  delete process.env.REALITY_FILE_LIMIT;
+  if (resolved === 5) {
+    console.log("  ok   REALITY_FILE_LIMIT from the environment is honoured");
+  } else {
+    console.log(`  FAIL REALITY_FILE_LIMIT ignored: resolved ${resolved}, want 5`);
+    fails++;
+  }
+  if (realityFileLimit(undefined) === 200) {
+    console.log("  ok   the default limit is 200 when nothing is configured");
+  } else {
+    console.log("  FAIL default limit is not 200");
+    fails++;
+  }
   rmSync(dir, { recursive: true, force: true });
 
   if (ts === sh) {

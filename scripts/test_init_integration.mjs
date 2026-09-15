@@ -7,39 +7,57 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const out = mkdtempSync(path.join(tmpdir(), "init-"));
-const bundle = path.join(out, "templates.mjs");
-
-execFileSync("npx", ["esbuild", "src/templates.ts", "--format=esm", "--bundle", `--outfile=${bundle}`], {
-  cwd: path.join(root, "vscode-extension"),
-  stdio: ["ignore", "ignore", "inherit"],
-});
-const t = await import(bundle);
 
 let fails = 0;
 const ok = (m) => console.log(`  ok   ${m}`);
 const no = (m) => { console.log(`  FAIL ${m}`); fails++; };
+const out = mkdtempSync(path.join(tmpdir(), "init-"));
+const bundle = path.join(out, "templates.mjs");
+const ioBundle = path.join(out, "realityIo.mjs");
+
+for (const [src, dest] of [["src/templates.ts", bundle], ["src/realityIo.ts", ioBundle]]) {
+  execFileSync("npx", ["esbuild", src, "--format=esm", "--bundle", "--platform=node", `--outfile=${dest}`], {
+    cwd: path.join(root, "vscode-extension"),
+    stdio: ["ignore", "ignore", "inherit"],
+  });
+}
+const t = await import(bundle);
+const io = await import(ioBundle);
 
 const ws = mkdtempSync(path.join(tmpdir(), "ws-"));
 
-// The gate scripts have to live in the workspace to find their own root, so
-// they are pre-existing files as far as init is concerned - exactly the case
-// the scanner fills `existingFiles` for.
+// A real project: source in a subdirectory, an ignored build directory, and the
+// gate scripts, which must live in the workspace to find their own root. The
+// nested file is the point - init once listed only the root directory, so
+// src/app.ts went unrecorded and the workspace failed its own first gate.
 mkdirSync(path.join(ws, "scripts"), { recursive: true });
 const gateScripts = ["gate_enforce.sh", "path_scope.sh", "decision_log.sh", "reality_gen.sh", "shard_store.sh"];
 for (const f of gateScripts) {
   writeFileSync(path.join(ws, "scripts", f), readFileSync(path.join(root, "scripts", f)));
 }
+mkdirSync(path.join(ws, "src", "deep"), { recursive: true });
+writeFileSync(path.join(ws, "src", "app.ts"), "export const x = 1;\n");
+writeFileSync(path.join(ws, "src", "deep", "nested.ts"), "export const y = 2;\n");
+writeFileSync(path.join(ws, "README.md"), "# a project\n");
+writeFileSync(path.join(ws, ".gitignore"), "build/\n");
+mkdirSync(path.join(ws, "build"), { recursive: true });
+writeFileSync(path.join(ws, "build", "ignored.js"), "// ignored\n");
 
+execFileSync("git", ["-C", ws, "init", "-q"]);
+execFileSync("git", ["-C", ws, "config", "user.email", "t@t.t"]);
+execFileSync("git", ["-C", ws, "config", "user.name", "t"]);
+execFileSync("git", ["-C", ws, "add", "-A"]);
+execFileSync("git", ["-C", ws, "commit", "-qm", "project"]);
+
+// Init as extension.ts does it, including the scanner's root-only file list:
+// the point is that regenerateReality must correct for it.
 const vars = {
   workspaceName: path.basename(ws),
   date: "2026-09-15",
   projectGoal: "ship a thing",
   outOfScope: "everything else",
-  existingFiles: gateScripts.map((f) => `scripts/${f}`),
+  existingFiles: ["README.md", ".gitignore"],
 };
-
-// Reproduce extension.ts init exactly
 for (const f of t.GOVERNANCE_FILES) {
   writeFileSync(path.join(ws, f), t.getTemplate(f, vars), "utf-8");
 }
@@ -49,12 +67,16 @@ for (const d of t.GOVERNANCE_DIRS) {
 for (const seed of t.getSeedFiles(vars)) {
   writeFileSync(path.join(ws, seed.path), seed.content, "utf-8");
 }
+io.regenerateReality(ws);
 
-execFileSync("git", ["-C", ws, "init", "-q"]);
-execFileSync("git", ["-C", ws, "config", "user.email", "t@t.t"]);
-execFileSync("git", ["-C", ws, "config", "user.name", "t"]);
+const listed = readFileSync(path.join(ws, "REALITY.md"), "utf-8");
+for (const nested of ["src/app.ts", "src/deep/nested.ts", "scripts/gate_enforce.sh"]) {
+  listed.includes(nested) ? ok(`init records the nested file ${nested}`) : no(`init missed ${nested}`);
+}
+listed.includes("build/ignored.js") ? no("init recorded an ignored file") : ok("init skips ignored files");
+
 execFileSync("git", ["-C", ws, "add", "-A"]);
-execFileSync("git", ["-C", ws, "commit", "-qm", "init"]);
+execFileSync("git", ["-C", ws, "commit", "-qm", "init governance"]);
 
 const gate = (mode) => {
   try {

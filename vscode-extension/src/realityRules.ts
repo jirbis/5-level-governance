@@ -11,14 +11,30 @@ export const ARTIFACTS_CLOSE = "<!-- /generated:artifacts -->";
 
 /**
  * Above this many files, list directories with counts instead of every path: an
- * artifact nobody can read is not a record. Must match REALITY_FILE_LIMIT in
- * scripts/reality_gen.sh, or the two gates disagree on large workspaces.
+ * artifact nobody can read is not a record.
  */
-export const REALITY_FILE_LIMIT = 200;
+export const REALITY_FILE_LIMIT_DEFAULT = 200;
+
+/**
+ * The effective limit. The shell generator reads REALITY_FILE_LIMIT from the
+ * environment, so this must too: a limit honoured by the generator but not by
+ * the checker means a freshly generated REALITY passes one gate and fails the
+ * other.
+ */
+export function realityFileLimit(configured?: number): number {
+  if (typeof configured === "number" && Number.isFinite(configured) && configured > 0) {
+    return configured;
+  }
+  const fromEnv = Number(process.env.REALITY_FILE_LIMIT);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) {
+    return fromEnv;
+  }
+  return REALITY_FILE_LIMIT_DEFAULT;
+}
 
 export function artifactLines(
   trackedFiles: string[],
-  limit: number = REALITY_FILE_LIMIT
+  limit: number = realityFileLimit()
 ): string[] {
   const files = trackedFiles.filter((f) => f.length > 0);
   if (files.length <= limit) {
@@ -67,7 +83,7 @@ export interface Staleness {
 export function realityStaleness(
   reality: string,
   trackedFiles: string[],
-  limit: number = REALITY_FILE_LIMIT
+  limit: number = realityFileLimit()
 ): Staleness {
   const recorded = recordedArtifacts(reality);
   if (recorded === null) {
@@ -152,7 +168,7 @@ export function renderReality(
   current: string,
   facts: SnapshotFacts,
   trackedFiles: string[],
-  limit: number = REALITY_FILE_LIMIT
+  limit: number = realityFileLimit()
 ): string | null {
   const withSnapshot = splice(current, SNAPSHOT_OPEN, SNAPSHOT_CLOSE, snapshotLines(facts));
   if (withSnapshot === null) {

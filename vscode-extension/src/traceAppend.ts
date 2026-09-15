@@ -1,9 +1,8 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { execFileSync } from "child_process";
-import { parsePathMd, todayISO } from "./parsers";
-import { renderReality, SnapshotFacts } from "./realityRules";
+import { todayISO } from "./parsers";
+import { regenerateReality, snapshotFacts, workspaceFiles } from "./realityIo";
 import { GOVERNANCE_FILES } from "./templates";
 import { shardFileName } from "./shardRules";
 
@@ -112,54 +111,18 @@ export async function updateReality(): Promise<void> {
     return;
   }
 
-  const realityPath = path.join(root, "REALITY.md");
-  if (!fs.existsSync(realityPath)) {
+  if (!fs.existsSync(path.join(root, "REALITY.md"))) {
     vscode.window.showErrorMessage("REALITY.md not found. Run 'Initialize Governance' first.");
     return;
   }
 
-  const pathContent = fs.existsSync(path.join(root, "PATH.md"))
-    ? fs.readFileSync(path.join(root, "PATH.md"), "utf-8")
-    : "";
-  const activeStep = parsePathMd(pathContent).activeStep ?? "unknown";
-
-  const run = (args: string[]): string | null => {
-    try {
-      return execFileSync("git", ["-C", root, ...args], {
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "ignore"],
-        maxBuffer: 64 * 1024 * 1024,
-      });
-    } catch {
-      return null;
-    }
-  };
-
-  // Tracked plus untracked-but-not-ignored, matching scripts/reality_gen.sh.
-  const tracked = [
-    ...new Set(
-      [run(["ls-files"]) ?? "", run(["ls-files", "--others", "--exclude-standard"]) ?? ""]
-        .join("\n")
-        .split("\n")
-        .map((f) => f.trim())
-        .filter((f) => f.length > 0)
-    ),
-  ].sort();
-
-  const facts: SnapshotFacts = {
-    date: todayISO(),
-    workspaceName: path.basename(root),
-    activeStep,
-    headSha: (run(["rev-parse", "--short", "HEAD"]) ?? "unknown").trim(),
-    treeState: (run(["status", "--porcelain"]) ?? "").trim().length > 0 ? "dirty" : "clean",
-  };
-
-  const current = fs.readFileSync(realityPath, "utf-8");
-  const next = renderReality(current, facts, tracked);
+  const limit = vscode.workspace
+    .getConfiguration("governance")
+    .get<number>("realityFileLimit");
 
   // Refuse rather than overwrite. The hand-written sections are the reason only
   // part of this file is generated, and a template would discard them.
-  if (next === null) {
+  if (!regenerateReality(root, limit)) {
     vscode.window.showErrorMessage(
       "REALITY.md has no generated regions. Add the generated:snapshot and " +
         "generated:artifacts markers, or run `make reality`, before using this command."
@@ -167,8 +130,8 @@ export async function updateReality(): Promise<void> {
     return;
   }
 
-  fs.writeFileSync(realityPath, next, "utf-8");
+  const facts = snapshotFacts(root);
   vscode.window.showInformationMessage(
-    `REALITY.md regenerated: step=${activeStep}, ${tracked.length} artifact(s)`
+    `REALITY.md regenerated: step=${facts.activeStep}, ${workspaceFiles(root).length} artifact(s)`
   );
 }

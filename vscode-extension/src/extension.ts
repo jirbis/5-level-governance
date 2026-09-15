@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { GOVERNANCE_FILES, GOVERNANCE_DIRS, getSeedFiles, getTemplate, GovernanceFile } from "./templates";
+import { regenerateReality } from "./realityIo";
 import { runGate1, runGate2, GateResult } from "./gates";
 import { initDiagnostics, updateDiagnostics, clearDiagnostics } from "./diagnostics";
 import { GovernanceTreeProvider, createStatusBarItem, updateStatusBarItem } from "./treeView";
@@ -90,6 +91,11 @@ async function handleInit(): Promise<void> {
       fs.writeFileSync(full, seed.content, "utf-8");
     }
   }
+
+  // Regenerate REALITY from the same git listing Gate 2 reads. The template can
+  // only guess at the workspace contents, and a guess that misses a nested file
+  // leaves the freshly initialized workspace failing its own first gate.
+  regenerateReality(root);
 
   treeProvider.refresh();
   updateStatusBarItem(statusBarItem);

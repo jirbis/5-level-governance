@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-15`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P46`
-- HEAD at generation: `76eba22`
+- Active PATH step: `P54`
+- HEAD at generation: `00a4cc3`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -26,6 +26,7 @@
 - `scripts/decision_log.sh`
 - `scripts/gate_enforce.sh`
 - `scripts/gate_report.sh`
+- `scripts/install.sh`
 - `scripts/path_scope.sh`
 - `scripts/reality_gen.sh`
 - `scripts/reality_update.sh`
@@ -35,6 +36,7 @@
 - `scripts/test_extension_parity.mjs`
 - `scripts/test_gate_report.sh`
 - `scripts/test_init_integration.mjs`
+- `scripts/test_install.sh`
 - `scripts/test_path_scope.sh`
 - `scripts/test_reality_gen.sh`
 - `scripts/test_shard_store.sh`
@@ -47,6 +49,7 @@
 - `trace/2026-09-15-codify.md`
 - `trace/2026-09-15-decisions-log.md`
 - `trace/2026-09-15-generated-reality.md`
+- `trace/2026-09-15-install-path.md`
 - `trace/2026-09-15-reality-working-tree.md`
 - `trace/2026-09-15-review-findings-pr6.md`
 - `trace/2026-09-15-scope-enforcement.md`
@@ -63,6 +66,7 @@
 - `vscode-extension/src/extension.ts`
 - `vscode-extension/src/gates.ts`
 - `vscode-extension/src/parsers.ts`
+- `vscode-extension/src/realityIo.ts`
 - `vscode-extension/src/realityRules.ts`
 - `vscode-extension/src/scanner.ts`
 - `vscode-extension/src/shardRules.ts`
@@ -74,6 +78,13 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- `scripts/install.sh` puts governance into another repository without
+  overwriting anything. Initialization previously wrote the doctrine but not the
+  gate runtime, so a new workspace had no `make gate` and no CI.
+- Init derives its file list from git instead of a root-only scan, so nested
+  project files are recorded; the extension honours a non-default
+  `REALITY_FILE_LIMIT` as the shell already did.
+
 - Five review findings on pull request #6, all verified and fixed. The most
   serious: an unresolvable diff base made every check pass vacuously.
 - The parity suite compared helpers, not workflows. An init integration test now
