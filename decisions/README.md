@@ -44,3 +44,22 @@ Where a check can only read agent-authored prose, say so where it is defined.
 When a gate criterion exists in more than one runtime, pin the implementations
 to each other with a test that compares their output, not just their verdict.
 Two gates that word the same finding differently are already drifting.
+
+### A check that cannot verify must fail, not pass
+When a check cannot perform its verification — a missing input, an unresolvable
+reference, a command that errors — it reports FAIL. It never reports PASS, and
+it never stays silent.
+
+The failure mode is specific and recurring: an error is swallowed, the empty
+result that follows is indistinguishable from a clean one, and the check
+announces success precisely when it has verified nothing. A false alarm costs a
+few minutes. A vacuous pass costs the reason the check exists.
+
+Every check therefore needs a test for the case where verification is
+impossible, not only for pass and fail. A suite that exercises only "the
+condition held" and "the condition did not hold" leaves the third state
+untested, and that is where this keeps hiding.
+
+This rule is enforced by review, not by a gate: no mechanical check can
+establish that another check fails closed. It is recorded in `REALITY.md` as an
+unenforced rule, as the first standing rule requires.

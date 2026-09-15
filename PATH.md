@@ -147,9 +147,13 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: vscode-extension/src/*.ts, scripts/**, PATH.md
 - [x] `P60` Update REALITY, record the fixes, run Gate 2.
       allowed_paths: PATH.md, trace/**
+- [x] `P61` Codify the standing rule that a check which cannot verify must fail rather than pass silently.
+      allowed_paths: decisions/**, PATH.md
+- [x] `P62` Update REALITY, record the codification, run Gate 2.
+      allowed_paths: PATH.md, trace/**, REALITY.md
 
 ## Current Pointer
-- `active_step`: `P60`
+- `active_step`: `P62`
 
 ## Blocking Questions
 - (none)

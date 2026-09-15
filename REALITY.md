@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-15`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P60`
-- HEAD at generation: `f6599e1`
+- Active PATH step: `P62`
+- HEAD at generation: `f4fd352`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -19,6 +19,7 @@
 - `PATH.md`
 - `README.md`
 - `REALITY.md`
+- `decisions/2026-09-15-checks-fail-closed.md`
 - `decisions/2026-09-15-declared-scope-is-a-precondition-of-admissibility.md`
 - `decisions/2026-09-15-records-become-directories.md`
 - `decisions/2026-09-15-the-record-of-rule-changes-becomes-an-enforced-artifact.md`
@@ -46,6 +47,7 @@
 - `trace/2026-09-15-ci-gate.md`
 - `trace/2026-09-15-ci-report-outside-workspace.md`
 - `trace/2026-09-15-codify-2.md`
+- `trace/2026-09-15-codify-fail-closed.md`
 - `trace/2026-09-15-codify.md`
 - `trace/2026-09-15-decisions-log.md`
 - `trace/2026-09-15-generated-reality.md`
@@ -79,6 +81,10 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- Codified the standing rule that a check which cannot verify must report FAIL,
+  and that every check needs a test for that third state. Three occurrences in
+  one branch made it evidence rather than a hunch.
+
 - Four owner-review findings fixed. Two were vacuous passes of the same shape as
   the diff-base bug: a broken test target reported as not configured, and a
   settings default masking the environment limit.
@@ -168,6 +174,10 @@
   the whole `vscode-extension/` tree existed on disk but were unrecorded.
 
 ## Open Risks
+- Unenforced rule, by design: "A check that cannot verify must fail, not pass"
+  (`decisions/` D4). No mechanical check can establish that another check fails
+  closed, so this one is held by review. Three instances of the defect it names
+  were found in this branch by review rather than by the suite.
 - The gates still do not consult the host project's own test or build exit
   codes, only this repository's.
 - The pull request comment cannot be posted from a fork, where the token is
