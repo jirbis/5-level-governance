@@ -31,6 +31,8 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 - Every changed file is inside the `allowed_paths` of the active step or of a
   completed step, verified against the real git diff.
 - No changed file matches a `forbidden_paths` pattern.
+- `TRACE.md` has only grown: every version has the previous one as an exact
+  byte prefix.
 - No forbidden LAW condition appears in REALITY.
 - TRACE includes exact files changed and outcomes.
 - Deviations are documented and resolved.
@@ -38,6 +40,8 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 ### FAIL if
 - REALITY deviates from PATH without explicit approval.
 - A changed file falls outside every declared `allowed_paths` pattern.
+- Any version of `TRACE.md` in the range rewrote, reordered, truncated or
+  deleted an earlier entry.
 - The active step declares no scope at all, or the workspace is not a git
   repository: scope that cannot be verified is not scope.
 - TRACE is incomplete or missing.
@@ -55,6 +59,20 @@ from git and matches it against the patterns declared in `PATH.md`:
   already executed.
 - `REALITY.md` and `TRACE.md` are always admissible; the loop mandates them.
 - `PATH.md` is not. Widening the route is itself a declared act.
+
+### Append-Only Enforcement (Mechanical)
+`LAW.md` forbids rewriting prior TRACE history. Gate 2 verifies it rather than
+trusting it: every version of `TRACE.md` must have the previous version as an
+exact byte prefix.
+
+- The whole commit chain `base..HEAD` is walked, then the working tree. A
+  branch that rewrites TRACE in one commit and restores it in the next has
+  still destroyed the audit trail, and comparing only the endpoints would
+  miss it.
+- A file absent at a revision counts as empty, so deleting `TRACE.md` reports
+  as truncation.
+- Creating `TRACE.md` where none existed is admissible; the empty prefix is a
+  prefix of anything.
 
 ### On FAIL
 - Record FAIL in `TRACE.md`.

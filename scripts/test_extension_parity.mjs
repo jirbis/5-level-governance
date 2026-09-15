@@ -1,7 +1,7 @@
 // Parity check: the extension's scope matcher must agree with scripts/path_scope.sh.
 // Two Gate 2 implementations that disagree are worse than one.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -14,7 +14,14 @@ execFileSync("npx", ["esbuild", "src/parsers.ts", "--format=esm", "--bundle", `-
   stdio: ["ignore", "ignore", "inherit"],
 });
 
+const traceBundle = path.join(out, "traceRules.mjs");
+execFileSync("npx", ["esbuild", "src/traceRules.ts", "--format=esm", "--bundle", `--outfile=${traceBundle}`], {
+  cwd: path.join(root, "vscode-extension"),
+  stdio: ["ignore", "ignore", "inherit"],
+});
+
 const { pathMatchesGlob, parsePathMd } = await import(bundle);
+const { prefixViolation } = await import(traceBundle);
 
 const cases = [
   ["scripts/gate_enforce.sh", "scripts/**"],
@@ -69,6 +76,47 @@ if (parsed.steps[0].allowedPaths.join() === "alpha/**" && parsed.steps[0].forbid
 } else {
   console.log("  FAIL scope fields not attached");
   fails++;
+}
+
+// TRACE append-only: the two implementations must agree on verdict, and on
+// whether the divergence is a truncation or an in-place rewrite.
+const traceCases = [
+  ["a\nb\n", "a\nb\nc\n", "pass"],
+  ["a\nb\n", "a\nb\n", "pass"],
+  ["", "anything\n", "pass"],
+  ["a\nb\n", "a\n", "truncated"],
+  ["a\nb\n", "", "truncated"],
+  ["a\nb\n", "a\nX\nc\n", "diverges"],
+  ["a\nb\nc\n", "a\nZ\nc\nd\n", "diverges"],
+  // shorter *and* different: an edited entry, not a dropped one
+  ["a\nbb\n", "a\nX\n", "diverges"],
+  ["a\nbb\n", "a\nb\n", "diverges"],
+];
+
+for (const [prev, next, want] of traceCases) {
+  const ts = prefixViolation(Buffer.from(prev), Buffer.from(next));
+  const dir = mkdtempSync(path.join(tmpdir(), "trace-"));
+  writeFileSync(path.join(dir, "prev"), prev);
+  writeFileSync(path.join(dir, "next"), next);
+  const shOut = execFileSync("bash", [
+    "-c",
+    `source "${root}/scripts/trace_append_only.sh"; { _trace_is_prefix "$1/prev" "$1/next" && echo __PASS__; } || true`,
+    "_",
+    dir,
+  ]).toString().trim();
+  rmSync(dir, { recursive: true, force: true });
+
+  const tsMsg = ts === null ? "__PASS__" : ts;
+  const tsKind = ts === null ? "pass" : ts.startsWith("truncated") ? "truncated" : "diverges";
+
+  // Compare the exact wording, not just the verdict: two gates that describe
+  // the same finding differently are already drifting apart.
+  if (tsMsg === shOut && tsKind === want) {
+    console.log(`  ok   trace ${JSON.stringify(prev)} -> ${JSON.stringify(next)} = ${want} :: ${shOut}`);
+  } else {
+    console.log(`  FAIL trace ${JSON.stringify(prev)} -> ${JSON.stringify(next)}: ts="${tsMsg}" sh="${shOut}" want=${want}`);
+    fails++;
+  }
 }
 
 rmSync(out, { recursive: true, force: true });

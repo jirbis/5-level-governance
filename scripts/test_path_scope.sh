@@ -75,7 +75,7 @@ make_repo() {
   local d; d="$(mktemp -d)"
   cp "$ROOT"/{CLAUDE.md,LAW.md,GATE.md,REALITY.md,TRACE.md,CODIFY.md} "$d/"
   mkdir -p "$d/scripts"
-  cp "$ROOT/scripts/gate_enforce.sh" "$ROOT/scripts/path_scope.sh" "$d/scripts/"
+  cp "$ROOT"/scripts/*.sh "$d/scripts/"   # whole dir: gate_enforce.sh sources siblings
   sed -i 's/Last gate status: `UNKNOWN`/Last gate status: `PASS`/' "$d/REALITY.md"
   git -C "$d" init -q
   git -C "$d" config user.email t@t.t
@@ -156,7 +156,7 @@ rm -rf "$d"
 d="$(mktemp -d)"
 cp "$ROOT"/{CLAUDE.md,LAW.md,GATE.md,REALITY.md,TRACE.md,CODIFY.md} "$d/"
 mkdir -p "$d/scripts"
-cp "$ROOT/scripts/gate_enforce.sh" "$ROOT/scripts/path_scope.sh" "$d/scripts/"
+cp "$ROOT"/scripts/*.sh "$d/scripts/"
 printf '%s\n' "$path_md_scoped" > "$d/PATH.md"
 out="$(bash "$d/scripts/gate_enforce.sh" gate2 2>&1)"
 grep -q "not a git repository" <<<"$out" && ok "non-git workspace fails closed" || no "non-git workspace must fail closed"

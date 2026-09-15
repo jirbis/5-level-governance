@@ -41,9 +41,19 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: PATH.md
 - [x] `P7` Run Gate 2 on the resulting state and apply the CODIFY decision.
       allowed_paths: PATH.md, CODIFY.md
+- [x] `P8` Declare scope for TRACE append-only enforcement.
+      allowed_paths: PATH.md
+- [x] `P9` Implement TRACE append-only verification in the shell gate, with tests.
+      allowed_paths: scripts/**, Makefile, PATH.md
+- [x] `P10` Mirror TRACE append-only verification in the VS Code extension.
+      allowed_paths: vscode-extension/src/*.ts, PATH.md
+- [x] `P11` Document the criterion in GATE.md and README.md.
+      allowed_paths: GATE.md, README.md, PATH.md
+- [x] `P12` Update REALITY, append TRACE, run Gate 2 and apply CODIFY.
+      allowed_paths: PATH.md, CODIFY.md
 
 ## Current Pointer
-- `active_step`: `P7`
+- `active_step`: `P12`
 
 ## Blocking Questions
 - (none)
@@ -52,3 +62,4 @@ Each step may declare the file scope it is permitted to touch:
 - All checked steps have corresponding TRACE entries.
 - Gate 1 and Gate 2 are both PASS for the final state.
 - Gate 2 rejects a change that touches a file outside the active step's `allowed_paths`.
+- Gate 2 rejects any history rewrite of `TRACE.md`: the recorded route may only grow.

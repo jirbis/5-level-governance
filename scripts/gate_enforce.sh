@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # shellcheck source=scripts/path_scope.sh
 source "$ROOT/scripts/path_scope.sh"
+# shellcheck source=scripts/trace_append_only.sh
+source "$ROOT/scripts/trace_append_only.sh"
 
 fail_count=0
 
@@ -163,10 +165,37 @@ check_path_scope() {
   fi
 }
 
+check_trace_append_only() {
+  if ! command -v git >/dev/null 2>&1; then
+    fail "TRACE append-only: git is unavailable, history cannot be verified"
+    return
+  fi
+  if ! git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    fail "TRACE append-only: not a git repository, history cannot be verified"
+    return
+  fi
+
+  local base violations
+  base="$(scope_diff_base "$ROOT")"
+
+  if violations="$(trace_verify_append_only "$ROOT" "$base")"; then
+    pass "TRACE.md is append-only against ${base:0:12}"
+    return
+  fi
+
+  local line
+  while IFS= read -r line; do
+    if [[ -n "$line" ]]; then
+      fail "TRACE append-only: $line"
+    fi
+  done <<< "$violations"
+}
+
 run_gate2() {
   echo "== Gate 2: REALITY Admissibility =="
   check_required_files
   check_path_scope
+  check_trace_append_only
 
   if rg -n 'Last gate status: `UNKNOWN`' "$ROOT/REALITY.md" >/dev/null; then
     fail "REALITY.md still has unknown gate status"

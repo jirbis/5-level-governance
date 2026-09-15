@@ -75,3 +75,25 @@ route is itself a visible, declared act.
 Set `GOVERNANCE_DIFF_BASE` (or the `governance.diffBase` setting in the
 extension) to control what the diff is taken against. The default is the
 merge-base with the default branch, falling back to `HEAD`.
+
+## Append-Only TRACE
+
+`TRACE.md` is the audit trail, so Gate 2 verifies that it only ever grows.
+Every version must have the previous version as an exact byte prefix:
+
+```
+FAIL: TRACE append-only: commit 9f3c1ab rewrites TRACE.md history
+      (diverges at byte 214, line 6)
+FAIL: TRACE append-only: working tree rewrites TRACE.md history
+      (truncated from 1830 to 1204 bytes)
+```
+
+This catches editing an earlier entry, reordering, inserting in the middle,
+truncating, and deleting the file outright.
+
+The check walks the whole commit chain, not just the endpoints. A branch that
+rewrites TRACE in one commit and restores it in the next has still destroyed
+the trail, and an endpoint comparison would report it clean.
+
+Creating `TRACE.md` where none existed is admissible — the empty prefix is a
+prefix of anything.

@@ -14,4 +14,5 @@ gate2:
 .PHONY: test
 test:
 	bash ./scripts/test_path_scope.sh
+	bash ./scripts/test_trace_append_only.sh
 	node ./scripts/test_extension_parity.mjs

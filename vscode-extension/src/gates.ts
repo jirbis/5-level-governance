@@ -8,6 +8,7 @@ import {
   parsePathMd,
   pathMatchesGlob,
 } from "./parsers";
+import { prefixViolation } from "./traceRules";
 
 export interface Check {
   pass: boolean;
@@ -218,6 +219,90 @@ function checkPathScope(root: string): Check[] {
   return checks;
 }
 
+/**
+ * TRACE append-only enforcement.
+ *
+ * `LAW.md` forbids rewriting prior TRACE history. Every version of TRACE.md
+ * must have the previous version as an exact byte prefix. The whole commit
+ * chain is walked, not just base against the working tree: a branch that
+ * rewrites TRACE in one commit and restores it in the next has still destroyed
+ * the audit trail, and comparing only the endpoints would miss it.
+ */
+function traceAt(root: string, rev: string, rel: string): Buffer {
+  try {
+    execFileSync("git", ["-C", root, "cat-file", "-e", `${rev}:${rel}`], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+  } catch {
+    return Buffer.alloc(0); // absent == empty, so deletion reads as truncation
+  }
+  try {
+    return execFileSync("git", ["-C", root, "show", `${rev}:${rel}`], {
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    return Buffer.alloc(0);
+  }
+}
+
+function checkTraceAppendOnly(root: string): Check[] {
+  const rel = "TRACE.md";
+
+  if (git(root, ["rev-parse", "--is-inside-work-tree"]) === null) {
+    return [
+      {
+        pass: false,
+        message: "TRACE append-only: not a git repository, history cannot be verified",
+        file: rel,
+      },
+    ];
+  }
+
+  const base = diffBase(root);
+  const revs = (git(root, ["rev-list", "--reverse", `${base}..HEAD`]) ?? "")
+    .split("\n")
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0);
+
+  const checks: Check[] = [];
+  let prev = traceAt(root, base, rel);
+
+  for (const rev of revs) {
+    const cur = traceAt(root, rev, rel);
+    const violation = prefixViolation(prev, cur);
+    if (violation) {
+      const short = (git(root, ["rev-parse", "--short", rev]) ?? rev).trim();
+      checks.push({
+        pass: false,
+        message: `TRACE append-only: commit ${short} rewrites ${rel} history (${violation})`,
+        file: rel,
+      });
+    }
+    prev = cur;
+  }
+
+  const worktree = fs.existsSync(path.join(root, rel))
+    ? fs.readFileSync(path.join(root, rel))
+    : Buffer.alloc(0);
+  const violation = prefixViolation(prev, worktree);
+  if (violation) {
+    checks.push({
+      pass: false,
+      message: `TRACE append-only: working tree rewrites ${rel} history (${violation})`,
+      file: rel,
+    });
+  }
+
+  if (checks.length === 0) {
+    checks.push({
+      pass: true,
+      message: `TRACE.md is append-only against ${base.slice(0, 12)}`,
+      file: rel,
+    });
+  }
+  return checks;
+}
+
 export function runGate1(): GateResult {
   const root = workspaceRoot();
   const checks: Check[] = [];
@@ -354,6 +439,9 @@ export function runGate2(): GateResult {
 
   // Bind the declared PATH scope to the real git diff
   checks.push(...checkPathScope(root));
+
+  // The recorded route may only grow
+  checks.push(...checkTraceAppendOnly(root));
 
   // Check REALITY.md gate status is not UNKNOWN
   const realityContent = readFile(root, "REALITY.md");
