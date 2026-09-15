@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-15`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P30`
-- HEAD at generation: `8622591`
+- Active PATH step: `P38`
+- HEAD at generation: `2cbe547`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -13,24 +13,23 @@
 - `.github/workflows/build-vsix.yml`
 - `.github/workflows/governance-gate.yml`
 - `CLAUDE.md`
-- `DECISIONS.md`
 - `GATE.md`
 - `LAW.md`
 - `Makefile`
 - `PATH.md`
 - `README.md`
 - `REALITY.md`
-- `TRACE.md`
 - `scripts/decision_log.sh`
 - `scripts/gate_enforce.sh`
 - `scripts/gate_report.sh`
 - `scripts/path_scope.sh`
+- `scripts/reality_gen.sh`
+- `scripts/reality_update.sh`
 - `scripts/test_decision_log.sh`
 - `scripts/test_extension_parity.mjs`
 - `scripts/test_gate_report.sh`
 - `scripts/test_path_scope.sh`
-- `scripts/test_trace_append_only.sh`
-- `scripts/trace_append_only.sh`
+- `scripts/test_reality_gen.sh`
 - `vscode-extension/.gitignore`
 - `vscode-extension/.vscodeignore`
 - `vscode-extension/esbuild.mjs`
@@ -41,6 +40,7 @@
 - `vscode-extension/src/extension.ts`
 - `vscode-extension/src/gates.ts`
 - `vscode-extension/src/parsers.ts`
+- `vscode-extension/src/realityRules.ts`
 - `vscode-extension/src/scanner.ts`
 - `vscode-extension/src/templates.ts`
 - `vscode-extension/src/traceAppend.ts`
@@ -50,6 +50,15 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- `TRACE.md` and `DECISIONS.md` are gone, replaced by `trace/` and `decisions/`,
+  one file per entry. Append-only became per-file immutability: an entry that
+  existed at the base must be byte-identical now, and every commit in the range
+  is walked so a rewrite restored later is still caught.
+- Two agents adding entries on the same day now merge cleanly. That was the last
+  open risk blocking parallel work, and there is a merge test for it.
+- The byte-prefix machinery became dead code once the gate stopped calling it
+  and was removed rather than left behind.
+
 - `REALITY.md` is generated, not written. `scripts/reality_gen.sh` rewrites the
   regions between the `generated:` markers from the tree; hand-written sections
   are spliced around and preserved. `make reality` applies it.
@@ -103,8 +112,6 @@
   the whole `vscode-extension/` tree existed on disk but were unrecorded.
 
 ## Open Risks
-- A single `TRACE.md` and a single `DECISIONS.md` will conflict under parallel
-  agents or branches; both should become directories of per-entry files.
 - The gates still do not consult the host project's own test or build exit
   codes, only this repository's.
 - The pull request comment cannot be posted from a fork, where the token is

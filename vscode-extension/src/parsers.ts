@@ -218,11 +218,29 @@ export function parseRealityMd(content: string): ParsedReality {
 
 export function parseTraceMd(content: string): ParsedTrace {
   const entries: TraceEntry[] = [];
-  // Match lines like: - 2026-02-18 — LABEL: description; gate_1=PASS, gate_2=PASS.
-  const entryRegex =
-    /^- (\d{4}-\d{2}-\d{2}) — ([^:]+):\s*(.+?)(?:;\s*gate_1=(\w+).*?gate_2=(\w+))?\.?\s*$/gm;
+
+  // Shard form, one file per entry: "# 2026-02-18 — LABEL" followed by the body
+  // and the gate lines. Shards are concatenated before parsing.
+  const shardRegex = /^# (\d{4}-\d{2}-\d{2}) [—-] (.+)$/gm;
   let m;
-  while ((m = entryRegex.exec(content)) !== null) {
+  while ((m = shardRegex.exec(content)) !== null) {
+    const rest = content.slice(m.index + m[0].length);
+    const body = rest.split(/^# \d{4}-\d{2}-\d{2} [—-] /m)[0];
+    const g1 = body.match(/gate_1[`"']?\s*[:=]\s*`?(\w+)/);
+    const g2 = body.match(/gate_2[`"']?\s*[:=]\s*`?(\w+)/);
+    entries.push({
+      date: m[1],
+      label: m[2].trim(),
+      description: body.trim().split("\n")[0] ?? "",
+      gate1: g1 ? g1[1] : null,
+      gate2: g2 ? g2[1] : null,
+    });
+  }
+
+  // Legacy single-file form: "- 2026-02-18 — LABEL: description; gate_1=PASS, ..."
+  const legacyRegex =
+    /^- (\d{4}-\d{2}-\d{2}) — ([^:]+):\s*(.+?)(?:;\s*gate_1=(\w+).*?gate_2=(\w+))?\.?\s*$/gm;
+  while ((m = legacyRegex.exec(content)) !== null) {
     entries.push({
       date: m[1],
       label: m[2].trim(),
@@ -231,6 +249,8 @@ export function parseTraceMd(content: string): ParsedTrace {
       gate2: m[5] || null,
     });
   }
+
+  entries.sort((a, b) => a.date.localeCompare(b.date));
   return { entries };
 }
 

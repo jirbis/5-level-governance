@@ -6,12 +6,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # shellcheck source=scripts/path_scope.sh
 source "$ROOT/scripts/path_scope.sh"
-# shellcheck source=scripts/trace_append_only.sh
-source "$ROOT/scripts/trace_append_only.sh"
 # shellcheck source=scripts/decision_log.sh
 source "$ROOT/scripts/decision_log.sh"
 # shellcheck source=scripts/reality_gen.sh
 source "$ROOT/scripts/reality_gen.sh"
+# shellcheck source=scripts/shard_store.sh
+source "$ROOT/scripts/shard_store.sh"
 
 fail_count=0
 
@@ -22,6 +22,15 @@ pass() {
 fail() {
   printf "FAIL: %s\n" "$1"
   fail_count=$((fail_count + 1))
+}
+
+require_dir() {
+  local d="$1"
+  if [[ -d "$ROOT/$d" ]]; then
+    pass "directory exists: $d/"
+  else
+    fail "missing required directory: $d/"
+  fi
 }
 
 require_file() {
@@ -39,8 +48,25 @@ check_required_files() {
   require_file "PATH.md"
   require_file "GATE.md"
   require_file "REALITY.md"
-  require_file "TRACE.md"
-  require_file "DECISIONS.md"
+  require_dir "trace"
+  require_dir "decisions"
+  check_no_legacy_records
+}
+
+# A workspace carrying the old single-file records has not been migrated. The
+# shard checks would simply not see those files, which would read as a pass.
+check_no_legacy_records() {
+  local legacy f found=0
+  for legacy in "TRACE.md" "DECISIONS.md"; do
+    f="$ROOT/$legacy"
+    if [[ -f "$f" ]]; then
+      fail "legacy record present: $legacy; run \`bash scripts/shard_migrate.sh --apply\` and remove it"
+      found=1
+    fi
+  done
+  if (( found == 0 )); then
+    pass "no unmigrated legacy records"
+  fi
 }
 
 run_gate1() {
@@ -169,10 +195,12 @@ check_path_scope() {
   fi
 }
 
-# Both TRACE.md and DECISIONS.md are append-only records: one of work, one of
-# rule changes. They share the prefix rule.
-check_append_only() {
-  local rel="$1" label="$2"
+# trace/ and decisions/ are append-only records: one of work, one of rule
+# changes. Sharded into a file per entry, "append-only" is per-file immutability:
+# a shard that existed at the base must be byte-identical now. Additions are the
+# only admissible change, which is also why two agents never collide.
+check_shard_immutability() {
+  local dir="$1" label="$2"
 
   if ! command -v git >/dev/null 2>&1; then
     fail "$label append-only: git is unavailable, history cannot be verified"
@@ -186,8 +214,8 @@ check_append_only() {
   local base violations
   base="$(scope_diff_base "$ROOT")"
 
-  if violations="$(trace_verify_append_only "$ROOT" "$base" "$rel")"; then
-    pass "$rel is append-only against ${base:0:12}"
+  if violations="$(shard_immutability "$ROOT" "$base" "$dir")"; then
+    pass "$dir/ is append-only against ${base:0:12}"
     return
   fi
 
@@ -197,6 +225,32 @@ check_append_only() {
       fail "$label append-only: $line"
     fi
   done <<< "$violations"
+}
+
+# Every entry must carry its gate evidence. The single-file record could only be
+# asked whether some line somewhere had it; a shard per entry can be asked of
+# each one.
+check_trace_evidence() {
+  local shard missing=0 count=0
+  while IFS= read -r shard; do
+    [[ -z "$shard" ]] && continue
+    count=$(( count + 1 ))
+    # `Gate1`/`Gate2` is the older CODIFY output spelling. Entries written that
+    # way do state both outcomes, and rewriting them to match today's spelling
+    # would be falsifying the record this rule exists to protect.
+    if ! grep -Eq 'gate_1|Gate1' "$ROOT/$shard" || ! grep -Eq 'gate_2|Gate2' "$ROOT/$shard"; then
+      fail "TRACE evidence: $shard does not state gate_1 and gate_2"
+      missing=1
+    fi
+  done < <(shard_list "$ROOT" "trace")
+
+  if (( count == 0 )); then
+    fail "TRACE evidence: trace/ contains no entries"
+    return
+  fi
+  if (( missing == 0 )); then
+    pass "all $count trace entr(ies) state gate_1 and gate_2"
+  fi
 }
 
 check_law_amendment_recorded() {
@@ -219,8 +273,8 @@ run_gate2() {
   echo "== Gate 2: REALITY Admissibility =="
   check_required_files
   check_path_scope
-  check_append_only "TRACE.md" "TRACE"
-  check_append_only "DECISIONS.md" "DECISIONS"
+  check_shard_immutability "trace" "TRACE"
+  check_shard_immutability "decisions" "DECISIONS"
   check_law_amendment_recorded
 
   # REALITY is generated, so "is it current?" is answerable: regenerate the
@@ -235,11 +289,7 @@ run_gate2() {
     fail "REALITY: $staleness"
   fi
 
-  if grep -Eq "^- [0-9]{4}-[0-9]{2}-[0-9]{2} .*gate_1=.*gate_2=" "$ROOT/TRACE.md"; then
-    pass "TRACE.md has dated gate evidence with gate_1 and gate_2"
-  else
-    fail "TRACE.md missing dated gate evidence with gate_1 and gate_2"
-  fi
+  check_trace_evidence
 
 }
 

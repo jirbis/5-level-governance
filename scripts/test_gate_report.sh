@@ -14,7 +14,11 @@ lacks(){ if [[ "$2" != *"$1"* ]]; then ok "$3"; else no "$3 :: unexpectedly cont
 
 scaffold() {
   local d; d="$(mktemp -d)"
-  cp "$ROOT"/{CLAUDE.md,LAW.md,GATE.md,TRACE.md,DECISIONS.md} "$d/"
+  cp "$ROOT"/{CLAUDE.md,LAW.md,GATE.md} "$d/"
+  mkdir -p "$d/trace" "$d/decisions"
+  printf '# trace/\nrules\n' > "$d/trace/README.md"
+  printf '# decisions/\nrules\n' > "$d/decisions/README.md"
+  printf '# 2026-01-01 — SEED\n\nseed entry; gate_1=PASS, gate_2=PASS.\n' > "$d/trace/2026-01-01-seed.md"
   mkdir -p "$d/scripts"
   cp "$ROOT"/scripts/*.sh "$d/scripts/"
   printf 'SHELL := /bin/bash\n\n.PHONY: test\ntest:\n\t@echo "  ok   stub"\n\t@echo "stub tests: PASS (1 assertions)"\n' > "$d/Makefile"

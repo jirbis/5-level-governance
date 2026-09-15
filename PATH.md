@@ -87,9 +87,25 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: GATE.md, README.md, PATH.md
 - [x] `P30` Update REALITY, append TRACE, run Gate 2.
       allowed_paths: PATH.md, DECISIONS.md
+- [x] `P31` Declare scope for sharding the two append-only records.
+      allowed_paths: PATH.md
+- [x] `P32` Implement the shard store and its immutability rule, with tests.
+      allowed_paths: scripts/**, Makefile, PATH.md
+- [x] `P33` Migrate `TRACE.md` and `DECISIONS.md` into `trace/` and `decisions/`.
+      allowed_paths: trace/**, decisions/**, TRACE.md, DECISIONS.md, scripts/**, PATH.md
+- [x] `P34` Replace the byte-prefix checks in Gate 2 with shard immutability.
+      allowed_paths: scripts/**, PATH.md
+- [x] `P35` Update the canon file list and the agent loop.
+      allowed_paths: CLAUDE.md, PATH.md
+- [x] `P36` Mirror the shard rules in the VS Code extension, including the append command and tree view.
+      allowed_paths: vscode-extension/src/*.ts, PATH.md
+- [x] `P37` Document the layout, the migration and the criterion.
+      allowed_paths: GATE.md, README.md, PATH.md
+- [x] `P38` Update REALITY, record the decision, append TRACE.
+      allowed_paths: PATH.md, decisions/**, trace/**
 
 ## Current Pointer
-- `active_step`: `P30`
+- `active_step`: `P38`
 
 ## Blocking Questions
 - (none)

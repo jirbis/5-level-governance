@@ -22,11 +22,40 @@ export const GOVERNANCE_FILES = [
   "PATH.md",
   "GATE.md",
   "REALITY.md",
-  "TRACE.md",
-  "DECISIONS.md",
 ] as const;
 
+/** The two append-only records are directories of one file per entry. */
+export const GOVERNANCE_DIRS = ["trace", "decisions"] as const;
+
 export type GovernanceFile = (typeof GOVERNANCE_FILES)[number];
+
+/**
+ * Files seeded inside the record directories at init: each directory's own
+ * rules, plus the first trace entry, so `trace/` is never an empty record.
+ */
+export function getSeedFiles(vars: TemplateVars): { path: string; content: string }[] {
+  return [
+    { path: "trace/README.md", content: traceReadmeTemplate() },
+    { path: "decisions/README.md", content: decisionsReadmeTemplate() },
+    { path: `trace/${vars.date}-init.md`, content: traceInitTemplate(vars) },
+  ];
+}
+
+function traceReadmeTemplate(): string {
+  return `# trace/ — the record of what the work did
+
+One file per entry, named \`YYYY-MM-DD-slug.md\`.
+
+## Rules
+- Never modify or delete an existing entry. Gate 2 rejects anything but an
+  addition, so the recorded route can only grow.
+- Each entry must state \`gate_1\` and \`gate_2\` with their outcomes.
+- Entries sort by filename, so the date leads.
+
+One file per entry is what keeps two agents, or two branches, from colliding on
+the last line of the same file.
+`;
+}
 
 export function getTemplate(file: GovernanceFile, vars: TemplateVars): string {
   switch (file) {
@@ -40,10 +69,8 @@ export function getTemplate(file: GovernanceFile, vars: TemplateVars): string {
       return gateTemplate();
     case "REALITY.md":
       return realityTemplate(vars);
-    case "TRACE.md":
-      return traceTemplate(vars);
-    case "DECISIONS.md":
-      return decisionsTemplate();
+
+
   }
 }
 
@@ -315,29 +342,26 @@ ${envLines.length ? `\n## Environment\n${envLines.join("\n")}\n` : ""}
 `;
 }
 
-function traceTemplate(vars: TemplateVars): string {
-  return `# TRACE
+function traceInitTemplate(vars: TemplateVars): string {
+  return `# ${vars.date} — INIT
 
-## Rules
-- Do not rewrite previous entries.
-- Append newest entry at the bottom.
-- Each entry must include gate status and files changed.
+Scaffolded 5-level-governance into the workspace${vars.projectGoal ? ` for goal: ${vars.projectGoal}` : ''}.
+Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, trace/, decisions/.
 
-## Entries
-
-- ${vars.date} — INIT: Scaffolded 5-level-governance files into workspace${vars.projectGoal ? ` for goal: ${vars.projectGoal}` : ''}. Files: CLAUDE.md, LAW.md, PATH.md, GATE.md, REALITY.md, TRACE.md, DECISIONS.md; gate_1=PASS (structure aligns with LAW), gate_2=PASS (REALITY matches created files).
+- \`gate_1\`: PASS — structure aligns with LAW
+- \`gate_2\`: PASS — REALITY matches the created files
 `;
 }
 
-function decisionsTemplate(): string {
+function decisionsReadmeTemplate(): string {
   return `# DECISIONS (Append-Only)
 
 The record of changes to the rules. \`TRACE.md\` records what the work did;
 this file records what changed the rules that govern the work.
 
 ## Rules
-- Append the newest entry at the bottom. Never rewrite an earlier entry.
-- Every change to \`LAW.md\` requires a new entry here with a recorded approval.
+- One file per decision, named \`YYYY-MM-DD-slug.md\`. Never modify or delete an\n  existing file: Gate 2 rejects anything but an addition.
+- Every change to \`LAW.md\` requires a new file here with a recorded approval.
   Gate 2 enforces this: an unexplained amendment is inadmissible.
 - Do not amend \`LAW.md\` for convenience. Amend it when a recorded gate failure
   or structural limitation demands it.

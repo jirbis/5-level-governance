@@ -14,6 +14,12 @@ execFileSync("npx", ["esbuild", "src/parsers.ts", "--format=esm", "--bundle", `-
   stdio: ["ignore", "ignore", "inherit"],
 });
 
+const shardBundle = path.join(out, "shardRules.mjs");
+execFileSync("npx", ["esbuild", "src/shardRules.ts", "--format=esm", "--bundle", `--outfile=${shardBundle}`], {
+  cwd: path.join(root, "vscode-extension"),
+  stdio: ["ignore", "ignore", "inherit"],
+});
+
 const realityBundle = path.join(out, "realityRules.mjs");
 execFileSync("npx", ["esbuild", "src/realityRules.ts", "--format=esm", "--bundle", `--outfile=${realityBundle}`], {
   cwd: path.join(root, "vscode-extension"),
@@ -27,8 +33,9 @@ execFileSync("npx", ["esbuild", "src/traceRules.ts", "--format=esm", "--bundle",
 });
 
 const { pathMatchesGlob, parsePathMd } = await import(bundle);
-const { prefixViolation, hasApprovedEntry } = await import(traceBundle);
+const { hasApprovedEntry } = await import(traceBundle);
 const { realityStaleness } = await import(realityBundle);
+const { shardSlug, immutabilityViolation, isEntry, statesGateEvidence } = await import(shardBundle);
 
 const cases = [
   ["scripts/gate_enforce.sh", "scripts/**"],
@@ -83,47 +90,6 @@ if (parsed.steps[0].allowedPaths.join() === "alpha/**" && parsed.steps[0].forbid
 } else {
   console.log("  FAIL scope fields not attached");
   fails++;
-}
-
-// TRACE append-only: the two implementations must agree on verdict, and on
-// whether the divergence is a truncation or an in-place rewrite.
-const traceCases = [
-  ["a\nb\n", "a\nb\nc\n", "pass"],
-  ["a\nb\n", "a\nb\n", "pass"],
-  ["", "anything\n", "pass"],
-  ["a\nb\n", "a\n", "truncated"],
-  ["a\nb\n", "", "truncated"],
-  ["a\nb\n", "a\nX\nc\n", "diverges"],
-  ["a\nb\nc\n", "a\nZ\nc\nd\n", "diverges"],
-  // shorter *and* different: an edited entry, not a dropped one
-  ["a\nbb\n", "a\nX\n", "diverges"],
-  ["a\nbb\n", "a\nb\n", "diverges"],
-];
-
-for (const [prev, next, want] of traceCases) {
-  const ts = prefixViolation(Buffer.from(prev), Buffer.from(next));
-  const dir = mkdtempSync(path.join(tmpdir(), "trace-"));
-  writeFileSync(path.join(dir, "prev"), prev);
-  writeFileSync(path.join(dir, "next"), next);
-  const shOut = execFileSync("bash", [
-    "-c",
-    `source "${root}/scripts/trace_append_only.sh"; { _trace_is_prefix "$1/prev" "$1/next" && echo __PASS__; } || true`,
-    "_",
-    dir,
-  ]).toString().trim();
-  rmSync(dir, { recursive: true, force: true });
-
-  const tsMsg = ts === null ? "__PASS__" : ts;
-  const tsKind = ts === null ? "pass" : ts.startsWith("truncated") ? "truncated" : "diverges";
-
-  // Compare the exact wording, not just the verdict: two gates that describe
-  // the same finding differently are already drifting apart.
-  if (tsMsg === shOut && tsKind === want) {
-    console.log(`  ok   trace ${JSON.stringify(prev)} -> ${JSON.stringify(next)} = ${want} :: ${shOut}`);
-  } else {
-    console.log(`  FAIL trace ${JSON.stringify(prev)} -> ${JSON.stringify(next)}: ts="${tsMsg}" sh="${shOut}" want=${want}`);
-    fails++;
-  }
 }
 
 // DECISIONS: the approval rule must read identically in both runtimes.
@@ -201,6 +167,77 @@ for (const [label, reality, tracked, wantStale] of realityCases) {
     console.log(`  ok   reality ${label} -> ${wantStale ? "stale" : "current"} :: ${shOut}`);
   } else {
     console.log(`  FAIL reality ${label}: ts="${tsMsg}" sh="${shOut}" wantStale=${wantStale}`);
+    fails++;
+  }
+}
+
+// Shard rules: slugs must agree, or the two runtimes name the same entry
+// differently and the record forks.
+const slugCases = [
+  "SCOPE ENFORCEMENT: bind PATH steps!",
+  "CI GATE",
+  "  ///  ",
+  "Ünicode and    spaces",
+  "trailing---dashes---",
+];
+for (const label of slugCases) {
+  const ts = shardSlug(label);
+  const sh = execFileSync("bash", [
+    "-c",
+    `source "${root}/scripts/shard_store.sh"; shard_slug "$1"`,
+    "_",
+    label,
+  ]).toString().trim();
+  if (ts === sh) {
+    console.log(`  ok   slug ${JSON.stringify(label)} -> ${JSON.stringify(ts)} (both)`);
+  } else {
+    console.log(`  FAIL slug ${JSON.stringify(label)}: ts=${JSON.stringify(ts)} sh=${JSON.stringify(sh)}`);
+    fails++;
+  }
+}
+
+const statusCases = [
+  ["A", "trace/x.md", undefined, null],
+  ["M", "trace/x.md", undefined, "modified: trace/x.md"],
+  ["D", "trace/x.md", undefined, "deleted: trace/x.md"],
+  ["R100", "trace/x.md", "trace/y.md", "renamed: trace/x.md -> trace/y.md"],
+];
+for (const [status, a, b, want] of statusCases) {
+  const got = immutabilityViolation(status, a, b);
+  if (got === want) {
+    console.log(`  ok   status ${status} -> ${want ?? "admissible"}`);
+  } else {
+    console.log(`  FAIL status ${status}: got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
+    fails++;
+  }
+}
+
+const entryCases = [
+  ["trace/2026-01-01-a.md", "trace", true],
+  ["trace/README.md", "trace", false],
+  ["trace/sub/x.md", "trace", true],
+  ["decisions/x.md", "trace", false],
+];
+for (const [p_, dir, want] of entryCases) {
+  if (isEntry(p_, dir) === want) {
+    console.log(`  ok   isEntry ${p_} in ${dir}/ -> ${want}`);
+  } else {
+    console.log(`  FAIL isEntry ${p_} in ${dir}/ -> ${!want}`);
+    fails++;
+  }
+}
+
+// The legacy CODIFY spelling still counts as evidence in both runtimes.
+for (const [text, want] of [
+  ["gate_1=PASS, gate_2=PASS", true],
+  ["Gate1=PASS, Gate2=PASS", true],
+  ["gate_1=PASS only", false],
+  ["no evidence at all", false],
+]) {
+  if (statesGateEvidence(text) === want) {
+    console.log(`  ok   evidence ${JSON.stringify(text)} -> ${want}`);
+  } else {
+    console.log(`  FAIL evidence ${JSON.stringify(text)} -> ${!want}`);
     fails++;
   }
 }

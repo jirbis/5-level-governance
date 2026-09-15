@@ -10,24 +10,24 @@ It implements the LAW-PATH-TRACE-GATE-REALITY discipline as a strict artifact wo
 - `PATH.md`: intended implementation route.
 - `GATE.md`: admissibility checks (before work and before done).
 - `REALITY.md`: current state of repo/artifacts; generated sections kept current by `make reality`.
-- `TRACE.md`: append-only execution evidence.
-- `DECISIONS.md`: append-only record of changes to the rules, with approvals.
+- `trace/`: append-only execution evidence, one file per entry.
+- `decisions/`: append-only record of changes to the rules, with approvals.
 
 ## 7-Step Combined Loop
 1. Validate against `LAW.md`.
 2. Define or update `PATH.md`.
 3. Run Gate 1 (PATH admissibility).
 4. Execute work and update `REALITY.md`.
-5. Append actual changes to `TRACE.md`.
+5. Add a new entry under `trace/` recording the actual changes.
 6. Run Gate 2 (REALITY admissibility).
-7. Record any rule change in `DECISIONS.md` with an approval.
+7. Record any rule change as a new file under `decisions/` with an approval.
 
 ## Usage
 1. Open this folder as the working context.
 2. Load `CLAUDE.md` as your runtime instruction.
 3. Keep all state transitions in files, not chat.
 
-Rule: if it is not written in `LAW.md`, `PATH.md`, `GATE.md`, `REALITY.md`, or `TRACE.md`, it does not exist.
+Rule: if it is not written in `LAW.md`, `PATH.md`, `GATE.md`, `REALITY.md`, or `trace/`, it does not exist.
 
 ## Continuous Integration
 
@@ -109,6 +109,7 @@ not a record.
 - Run Gate 2 only: `make gate2`
 - Run the test suite: `make test`
 - Regenerate REALITY: `make reality`
+- Render the records: `make trace`, `make decisions`
 - Render the Markdown report: `make report`
 - Direct script usage: `bash ./scripts/gate_enforce.sh [gate1|gate2|all]`
 
@@ -144,7 +145,7 @@ Patterns are anchored at the workspace root and must match the whole path.
 
 The check fails closed. If the active step declares no `allowed_paths`, or the
 workspace is not a git repository, no change is admissible: scope that cannot be
-verified is not scope. `REALITY.md` and `TRACE.md` are always writable because
+verified is not scope. `REALITY.md` and `trace/**` are always writable because
 the execution loop mandates writing them; `PATH.md` is not, so widening the
 route is itself a visible, declared act.
 
@@ -152,32 +153,55 @@ Set `GOVERNANCE_DIFF_BASE` (or the `governance.diffBase` setting in the
 extension) to control what the diff is taken against. The default is the
 merge-base with the default branch, falling back to `HEAD`.
 
-## Append-Only TRACE
+## Append-Only Records
 
-`TRACE.md` is the audit trail, so Gate 2 verifies that it only ever grows.
-Every version must have the previous version as an exact byte prefix:
+`trace/` records what the work did. `decisions/` records what changed the rules.
+Both are directories of one file per entry:
 
 ```
-FAIL: TRACE append-only: commit 9f3c1ab rewrites TRACE.md history
-      (diverges at byte 214, line 6)
-FAIL: TRACE append-only: working tree rewrites TRACE.md history
-      (truncated from 1830 to 1204 bytes)
+trace/2026-09-15-scope-enforcement.md
+trace/2026-09-15-ci-gate.md
+decisions/2026-09-15-declared-scope.md
 ```
 
-This catches editing an earlier entry, reordering, inserting in the middle,
-truncating, and deleting the file outright.
+**Why not one file.** A single append-only file is correct but not usable: two
+agents, or two branches, appending on the same day collide on the last line of
+the same file every time. One file per entry removes the conflict by
+construction — two additions to a directory do not touch the same bytes. This is
+the difference between a discipline one person can keep and one a team can.
 
-The check walks the whole commit chain, not just the endpoints. A branch that
-rewrites TRACE in one commit and restores it in the next has still destroyed
-the trail, and an endpoint comparison would report it clean.
+Append-only becomes per-file immutability, which is sharper: an entry that
+existed at the base must be byte-identical now.
 
-Creating `TRACE.md` where none existed is admissible — the empty prefix is a
-prefix of anything. `DECISIONS.md` is held to the same rule.
+```
+FAIL: TRACE append-only: modified: trace/2026-02-18-init.md
+FAIL: TRACE append-only: touched in commit 9f3c1ab: trace/2026-02-18-init.md
+```
+
+Gate 2 walks every commit in the range, not just the endpoints: a branch that
+rewrites an entry and restores it later has still tampered with the record. Only
+entries already in the record are protected — an entry added on this branch can
+still be corrected before it merges.
+
+Each directory's `README.md` holds that directory's rules, not an entry, and is
+exempt. Render the whole record in order with `make trace` or `make decisions`.
+
+### Migrating from a single file
+
+```
+bash scripts/shard_migrate.sh            # dry run: shows the filenames
+bash scripts/shard_migrate.sh --apply    # writes the shards
+```
+
+The legacy `TRACE.md` and `DECISIONS.md` are left in place; removing them is a
+separate, deliberate commit, because a record is not something a script should
+delete on its own. Gate 2 fails while they are still present, so an unmigrated
+workspace is told rather than silently passing.
 
 ## Policy Change Control
 
 `LAW.md` is the policy, and it may not change without a recorded approval.
-`TRACE.md` records what the work did; `DECISIONS.md` records what changed the
+`trace/` records what the work did; `decisions/` records what changed the
 rules that govern the work.
 
 If a diff touches `LAW.md`, Gate 2 requires a newly appended entry naming it:
@@ -196,7 +220,7 @@ If a diff touches `LAW.md`, Gate 2 requires a newly appended entry naming it:
 Otherwise:
 
 ```
-FAIL: DECISIONS: LAW.md changed with no new DECISIONS.md entry naming it
+FAIL: DECISIONS: LAW.md changed with no new decisions/ entry naming it
       and carrying a recorded approved_by
 ```
 

@@ -5,6 +5,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/path_scope.sh"
+source "$ROOT/scripts/shard_store.sh"
 source "$ROOT/scripts/decision_log.sh"
 
 tests=0
@@ -12,11 +13,7 @@ fails=0
 ok() { tests=$((tests+1)); printf "  ok   %s\n" "$1"; }
 no() { tests=$((tests+1)); fails=$((fails+1)); printf "  FAIL %s\n" "$1"; }
 
-BASE_DECISIONS='# DECISIONS (Append-Only)
-
-## Entries
-
-### D1 — 2026-01-01 — An older, already recorded decision
+BASE_DECISION='### D1 — 2026-01-01 — An older, already recorded decision
 - `type`: ARCHITECTURAL
 - `target_file`: `LAW.md`
 - `change`: something earlier.
@@ -29,7 +26,9 @@ new_repo() {
   git -C "$d" config user.email t@t.t
   git -C "$d" config user.name t
   printf '# LAW\n\n## Non-Negotiables\n- original rule.\n' > "$d/LAW.md"
-  printf '%s\n' "$BASE_DECISIONS" > "$d/DECISIONS.md"
+  mkdir -p "$d/decisions"
+  printf '# decisions/\nrules, not an entry\n' > "$d/decisions/README.md"
+  printf '%s\n' "$BASE_DECISION" > "$d/decisions/2026-01-01-older.md"
   git -C "$d" add -A >/dev/null
   git -C "$d" commit -qm base
   printf '%s' "$d"
@@ -65,11 +64,11 @@ echo "== policy changed =="
 
 d="$(new_repo)"
 amend_law "$d"
-check "amending LAW with no new entry fails" "$d" fail "no new DECISIONS.md entry"
+check "amending LAW with no new entry fails" "$d" fail "no new decisions/ entry"
 
 d="$(new_repo)"
 amend_law "$d"
-cat >> "$d/DECISIONS.md" <<'E'
+cat > "$d/decisions/2026-02-02-new.md" <<'E'
 
 ### D2 — 2026-02-02 — A properly recorded amendment
 - `type`: ARCHITECTURAL
@@ -87,7 +86,7 @@ check "the pre-existing D1 entry does not justify a new amendment" "$d" fail
 
 d="$(new_repo)"
 amend_law "$d"
-cat >> "$d/DECISIONS.md" <<'E'
+cat > "$d/decisions/2026-02-02-new.md" <<'E'
 
 ### D2 — 2026-02-02 — Entry with no approval
 - `type`: ARCHITECTURAL
@@ -100,7 +99,7 @@ check "an empty approved_by is not an approval" "$d" fail
 
 d="$(new_repo)"
 amend_law "$d"
-cat >> "$d/DECISIONS.md" <<'E'
+cat > "$d/decisions/2026-02-02-new.md" <<'E'
 
 ### D2 — 2026-02-02 — Entry with a placeholder approval
 - `type`: ARCHITECTURAL
@@ -113,7 +112,7 @@ check "a placeholder approved_by is not an approval" "$d" fail
 
 d="$(new_repo)"
 amend_law "$d"
-cat >> "$d/DECISIONS.md" <<'E'
+cat > "$d/decisions/2026-02-02-new.md" <<'E'
 
 ### D2 — 2026-02-02 — Entry with a TBD approval
 - `type`: OPERATIONAL
@@ -126,7 +125,7 @@ check "a TBD approved_by is not an approval" "$d" fail
 
 d="$(new_repo)"
 amend_law "$d"
-cat >> "$d/DECISIONS.md" <<'E'
+cat > "$d/decisions/2026-02-02-new.md" <<'E'
 
 ### D2 — 2026-02-02 — Entry about a different file
 - `type`: OPERATIONAL
@@ -140,7 +139,7 @@ check "an entry naming another file does not justify a LAW change" "$d" fail
 # approval and target must belong to the SAME entry
 d="$(new_repo)"
 amend_law "$d"
-cat >> "$d/DECISIONS.md" <<'E'
+cat > "$d/decisions/2026-02-02-new.md" <<'E'
 
 ### D2 — 2026-02-02 — Names LAW but is unapproved
 - `type`: ARCHITECTURAL
@@ -148,7 +147,8 @@ cat >> "$d/DECISIONS.md" <<'E'
 - `change`: added a rule.
 - `approved_by`:
 - `approved_at`: 2026-02-02
-
+E
+cat > "$d/decisions/2026-02-02-other.md" <<'E'
 ### D3 — 2026-02-02 — Approved but about something else
 - `type`: OPERATIONAL
 - `target_file`: `README.md`
@@ -160,13 +160,16 @@ check "target and approval must be in the same entry" "$d" fail
 
 d="$(new_repo)"
 amend_law "$d"
-rm "$d/DECISIONS.md"
-check "amending LAW with no DECISIONS.md at all fails" "$d" fail "does not exist"
+rm -rf "$d/decisions"
+check "amending LAW with no decisions/ at all fails" "$d" fail "does not exist"
 
 echo
 echo "== end-to-end through the gate =="
 d="$(new_repo)"
-cp "$ROOT"/{CLAUDE.md,PATH.md,GATE.md,REALITY.md,TRACE.md} "$d/"
+cp "$ROOT"/{CLAUDE.md,PATH.md,GATE.md,REALITY.md} "$d/"
+mkdir -p "$d/trace"
+printf '# trace/\nrules\n' > "$d/trace/README.md"
+printf '# 2026-01-01 — SEED\n\nseed; gate_1=PASS, gate_2=PASS.\n' > "$d/trace/2026-01-01-seed.md"
 cp "$ROOT/LAW.md" "$d/LAW.md"
 mkdir -p "$d/scripts"; cp "$ROOT"/scripts/*.sh "$d/scripts/"
 sed -i 's/Last gate status: `UNKNOWN`/Last gate status: `PASS`/' "$d/REALITY.md"

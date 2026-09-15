@@ -11,29 +11,23 @@
 # mistaken for more than it is.
 #
 # Exposes:
-#   decisions_appended_section <root> <base> [rel] -> the newly appended bytes
+#   decisions_added_entries <root> <base> [dir]    -> the newly added shards, concatenated
 #   decisions_check_law_amendment <root> <base>    -> reason on stdout, rc 0 if admissible
 #
 # The reason strings are shared verbatim with the extension's implementation in
 # vscode-extension/src/gates.ts. Two gates that word the same finding
 # differently are already drifting apart.
 
-# The portion of the log added since <base>. Append-only is verified separately,
-# so everything past the old length is by definition the new material.
-decisions_appended_section() {
-  local root="$1" base="$2" rel="${3:-DECISIONS.md}" old_size=0 tmp
-
-  tmp="$(mktemp)"
-  if git -C "$root" cat-file -e "$base:$rel" 2>/dev/null; then
-    git -C "$root" show "$base:$rel" >"$tmp" 2>/dev/null
-    old_size="$(wc -c <"$tmp")"
-    old_size="${old_size//[[:space:]]/}"
-  fi
-  rm -f "$tmp"
-
-  if [[ -f "$root/$rel" ]]; then
-    tail -c "+$(( old_size + 1 ))" "$root/$rel"
-  fi
+# The entries added since <base>, concatenated. Sharded, "what is new" is simply
+# which files did not exist before - no byte arithmetic, and no ambiguity when
+# two agents added entries in parallel.
+decisions_added_entries() {
+  local root="$1" base="$2" dir="${3:-decisions}"
+  local f
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    [[ -f "$root/$f" ]] && cat "$root/$f" && printf '\n'
+  done < <(shard_added "$root" "$base" "$dir")
 }
 
 # Does the appended section contain an entry that amends <target> and carries a
@@ -61,7 +55,7 @@ _decisions_has_approved_entry() {
 }
 
 decisions_check_law_amendment() {
-  local root="$1" base="$2" rel="${3:-DECISIONS.md}" target="${4:-LAW.md}"
+  local root="$1" base="$2" dir="${3:-decisions}" target="${4:-LAW.md}"
   local changed verdict
 
   changed="$(scope_changed_files "$root" "$base")"
@@ -70,18 +64,18 @@ decisions_check_law_amendment() {
     return 0
   fi
 
-  if [[ ! -f "$root/$rel" ]]; then
-    printf '%s changed but %s does not exist\n' "$target" "$rel"
+  if [[ ! -d "$root/$dir" ]]; then
+    printf '%s changed but %s/ does not exist' "$target" "$dir"
     return 1
   fi
 
-  verdict="$(decisions_appended_section "$root" "$base" "$rel" | _decisions_has_approved_entry "$target")"
+  verdict="$(decisions_added_entries "$root" "$base" "$dir" | _decisions_has_approved_entry "$target")"
   if [[ "$verdict" == "OK" ]]; then
     printf 'policy change recorded and approved'
     return 0
   fi
 
-  printf '%s changed with no new %s entry naming it and carrying a recorded approved_by\n' \
-    "$target" "$rel"
+  printf '%s changed with no new %s/ entry naming it and carrying a recorded approved_by' \
+    "$target" "$dir"
   return 1
 }

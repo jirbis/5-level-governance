@@ -2,14 +2,15 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { execFileSync } from "child_process";
-import { GOVERNANCE_FILES } from "./templates";
+import { GOVERNANCE_FILES, GOVERNANCE_DIRS } from "./templates";
 import {
   IMPLICIT_ALLOWED_PATHS,
   parsePathMd,
   pathMatchesGlob,
 } from "./parsers";
-import { hasApprovedEntry, prefixViolation } from "./traceRules";
+import { hasApprovedEntry } from "./traceRules";
 import { realityStaleness } from "./realityRules";
+import { immutabilityViolation, isEntry, statesGateEvidence } from "./shardRules";
 
 export interface Check {
   pass: boolean;
@@ -229,76 +230,138 @@ function checkPathScope(root: string): Check[] {
  * rewrites TRACE in one commit and restores it in the next has still destroyed
  * the audit trail, and comparing only the endpoints would miss it.
  */
-function traceAt(root: string, rev: string, rel: string): Buffer {
-  try {
-    execFileSync("git", ["-C", root, "cat-file", "-e", `${rev}:${rel}`], {
-      stdio: ["ignore", "ignore", "ignore"],
-    });
-  } catch {
-    return Buffer.alloc(0); // absent == empty, so deletion reads as truncation
-  }
-  try {
-    return execFileSync("git", ["-C", root, "show", `${rev}:${rel}`], {
-      maxBuffer: 64 * 1024 * 1024,
-    });
-  } catch {
-    return Buffer.alloc(0);
-  }
+// trace/ and decisions/ are append-only records: one of work, one of rule
+// changes. Sharded into a file per entry, append-only is per-file immutability:
+// a shard that existed at the base must be byte-identical now.
+function nameStatusRecords(root: string, args: string[]): [string, string, string?][] {
+  const out = git(root, args) ?? "";
+  return out
+    .split("\n")
+    .filter((l) => l.trim().length > 0)
+    .map((l) => l.split("\t"))
+    .filter((f) => f.length >= 2)
+    .map((f) => [f[0], f[1], f[2]] as [string, string, string?]);
 }
 
-// TRACE.md and DECISIONS.md are both append-only records: one of work, one of
-// rule changes. They share the prefix rule.
-function checkAppendOnly(root: string, rel: string, label: string): Check[] {
+/**
+ * Shards already part of the record at <base>. Only these are protected: an
+ * entry added on this branch may still be corrected before it merges, but one
+ * already in the record may not be touched.
+ */
+function shardsAtBase(root: string, base: string, dir: string): Set<string> {
+  const out = git(root, ["ls-tree", "-r", "--name-only", base, "--", `${dir}/`]) ?? "";
+  return new Set(
+    out.split("\n").map((l) => l.trim()).filter((l) => isEntry(l, dir))
+  );
+}
+
+function checkShardImmutability(root: string, dir: string, label: string): Check[] {
   if (git(root, ["rev-parse", "--is-inside-work-tree"]) === null) {
     return [
       {
         pass: false,
         message: `${label} append-only: not a git repository, history cannot be verified`,
-        file: rel,
+        file: dir,
       },
     ];
   }
 
   const base = diffBase(root);
+  const checks: Check[] = [];
+  const protectedShards = shardsAtBase(root, base, dir);
+
+  // Walk each commit as well as the endpoints: a branch that rewrites an entry
+  // in one commit and restores it in the next has still tampered with the
+  // record, and comparing only the endpoints would call that clean.
   const revs = (git(root, ["rev-list", "--reverse", `${base}..HEAD`]) ?? "")
     .split("\n")
     .map((r) => r.trim())
     .filter((r) => r.length > 0);
 
-  const checks: Check[] = [];
-  let prev = traceAt(root, base, rel);
-
   for (const rev of revs) {
-    const cur = traceAt(root, rev, rel);
-    const violation = prefixViolation(prev, cur);
-    if (violation) {
+    const records = nameStatusRecords(root, [
+      "diff-tree", "--no-commit-id", "--name-status", "-r",
+      "--diff-filter=MDRT", rev, "--", `${dir}/`,
+    ]);
+    for (const [, pathA] of records) {
+      if (!protectedShards.has(pathA)) {
+        continue;
+      }
       const short = (git(root, ["rev-parse", "--short", rev]) ?? rev).trim();
       checks.push({
         pass: false,
-        message: `${label} append-only: commit ${short} rewrites ${rel} history (${violation})`,
-        file: rel,
+        message: `${label} append-only: touched in commit ${short}: ${pathA}`,
+        file: pathA,
       });
     }
-    prev = cur;
   }
 
-  const worktree = fs.existsSync(path.join(root, rel))
-    ? fs.readFileSync(path.join(root, rel))
-    : Buffer.alloc(0);
-  const violation = prefixViolation(prev, worktree);
-  if (violation) {
-    checks.push({
-      pass: false,
-      message: `${label} append-only: working tree rewrites ${rel} history (${violation})`,
-      file: rel,
-    });
+  const endpoints = [
+    ...nameStatusRecords(root, ["diff", "--name-status", base, "--", `${dir}/`]),
+    ...nameStatusRecords(root, ["diff", "--name-status", "--cached", base, "--", `${dir}/`]),
+  ];
+  const seen = new Set<string>();
+  for (const [status, pathA, pathB] of endpoints) {
+    if (!isEntry(pathA, dir)) {
+      continue;
+    }
+    const violation = immutabilityViolation(status, pathA, pathB);
+    if (violation && !seen.has(violation)) {
+      seen.add(violation);
+      checks.push({
+        pass: false,
+        message: `${label} append-only: ${violation}`,
+        file: pathA,
+      });
+    }
   }
 
   if (checks.length === 0) {
     checks.push({
       pass: true,
-      message: `${rel} is append-only against ${base.slice(0, 12)}`,
-      file: rel,
+      message: `${dir}/ is append-only against ${base.slice(0, 12)}`,
+      file: dir,
+    });
+  }
+  return checks;
+}
+
+/**
+ * Every entry must carry its gate evidence. The single-file record could only
+ * be asked whether some line somewhere had it; a shard per entry can be asked
+ * of each one.
+ */
+function checkTraceEvidence(root: string): Check[] {
+  const dir = "trace";
+  const full = path.join(root, dir);
+  if (!fs.existsSync(full)) {
+    return [{ pass: false, message: "TRACE evidence: trace/ does not exist", file: dir }];
+  }
+  const entries = fs
+    .readdirSync(full)
+    .map((f) => `${dir}/${f}`)
+    .filter((f) => isEntry(f, dir))
+    .sort();
+
+  if (entries.length === 0) {
+    return [{ pass: false, message: "TRACE evidence: trace/ contains no entries", file: dir }];
+  }
+
+  const checks: Check[] = [];
+  for (const entry of entries) {
+    if (!statesGateEvidence(fs.readFileSync(path.join(root, entry), "utf-8"))) {
+      checks.push({
+        pass: false,
+        message: `TRACE evidence: ${entry} does not state gate_1 and gate_2`,
+        file: entry,
+      });
+    }
+  }
+  if (checks.length === 0) {
+    checks.push({
+      pass: true,
+      message: `all ${entries.length} trace entr(ies) state gate_1 and gate_2`,
+      file: dir,
     });
   }
   return checks;
@@ -309,7 +372,7 @@ function checkAppendOnly(root: string, rel: string, label: string): Check[] {
  * come with a new approved entry in the append-only decision log.
  */
 function checkLawAmendmentRecorded(root: string): Check[] {
-  const rel = "DECISIONS.md";
+  const dir = "decisions";
   const target = "LAW.md";
 
   if (git(root, ["rev-parse", "--is-inside-work-tree"]) === null) {
@@ -317,7 +380,7 @@ function checkLawAmendmentRecorded(root: string): Check[] {
       {
         pass: false,
         message: "DECISIONS: not a git repository, policy changes cannot be verified",
-        file: rel,
+        file: dir,
       },
     ];
   }
@@ -328,33 +391,40 @@ function checkLawAmendmentRecorded(root: string): Check[] {
       {
         pass: true,
         message: `DECISIONS: no unrecorded policy change against ${base.slice(0, 12)}`,
-        file: rel,
+        file: dir,
       },
     ];
   }
 
-  const full = path.join(root, rel);
+  const full = path.join(root, dir);
   if (!fs.existsSync(full)) {
     return [
       {
         pass: false,
-        message: `DECISIONS: ${target} changed but ${rel} does not exist`,
+        message: `DECISIONS: ${target} changed but ${dir}/ does not exist`,
         file: target,
       },
     ];
   }
 
-  // Append-only is verified separately, so everything past the old length is
-  // by definition the newly appended material.
-  const oldLength = traceAt(root, base, rel).length;
-  const appended = fs.readFileSync(full).subarray(oldLength).toString("utf-8");
+  // Sharded, "what is new" is simply which files did not exist before - no byte
+  // arithmetic, and no ambiguity when two agents added entries in parallel.
+  const atBase = shardsAtBase(root, base, dir);
+  const added = fs
+    .readdirSync(full)
+    .map((f) => `${dir}/${f}`)
+    .filter((f) => isEntry(f, dir) && !atBase.has(f))
+    .sort();
+  const section = added
+    .map((f) => fs.readFileSync(path.join(root, f), "utf-8"))
+    .join("\n");
 
-  if (hasApprovedEntry(appended, target)) {
+  if (hasApprovedEntry(section, target)) {
     return [
       {
         pass: true,
         message: `DECISIONS: policy change recorded and approved against ${base.slice(0, 12)}`,
-        file: rel,
+        file: dir,
       },
     ];
   }
@@ -362,9 +432,9 @@ function checkLawAmendmentRecorded(root: string): Check[] {
     {
       pass: false,
       message:
-        `DECISIONS: ${target} changed with no new ${rel} entry naming it and ` +
+        `DECISIONS: ${target} changed with no new ${dir}/ entry naming it and ` +
         "carrying a recorded approved_by",
-      file: rel,
+      file: dir,
     },
   ];
 }
@@ -378,7 +448,7 @@ export function runGate1(): GateResult {
     return { gate: "Gate 1", pass: false, checks };
   }
 
-  // Check all required files exist
+  // Check all required files and record directories exist
   for (const file of GOVERNANCE_FILES) {
     if (fileExists(root, file)) {
       checks.push({ pass: true, message: `File exists: ${file}`, file });
@@ -387,6 +457,17 @@ export function runGate1(): GateResult {
         pass: false,
         message: `Missing required file: ${file}`,
         file,
+      });
+    }
+  }
+  for (const dir of GOVERNANCE_DIRS) {
+    if (fs.existsSync(path.join(root, dir))) {
+      checks.push({ pass: true, message: `Directory exists: ${dir}/`, file: dir });
+    } else {
+      checks.push({
+        pass: false,
+        message: `Missing required directory: ${dir}/`,
+        file: dir,
       });
     }
   }
@@ -490,7 +571,7 @@ export function runGate2(): GateResult {
     return { gate: "Gate 2", pass: false, checks };
   }
 
-  // Check all required files exist
+  // Check all required files and record directories exist
   for (const file of GOVERNANCE_FILES) {
     if (fileExists(root, file)) {
       checks.push({ pass: true, message: `File exists: ${file}`, file });
@@ -502,13 +583,25 @@ export function runGate2(): GateResult {
       });
     }
   }
+  for (const dir of GOVERNANCE_DIRS) {
+    if (fs.existsSync(path.join(root, dir))) {
+      checks.push({ pass: true, message: `Directory exists: ${dir}/`, file: dir });
+    } else {
+      checks.push({
+        pass: false,
+        message: `Missing required directory: ${dir}/`,
+        file: dir,
+      });
+    }
+  }
 
   // Bind the declared PATH scope to the real git diff
   checks.push(...checkPathScope(root));
 
   // The recorded route and the record of rule changes may only grow
-  checks.push(...checkAppendOnly(root, "TRACE.md", "TRACE"));
-  checks.push(...checkAppendOnly(root, "DECISIONS.md", "DECISIONS"));
+  checks.push(...checkShardImmutability(root, "trace", "TRACE"));
+  checks.push(...checkShardImmutability(root, "decisions", "DECISIONS"));
+  checks.push(...checkTraceEvidence(root));
 
   // Policy may not change without a recorded approval
   checks.push(...checkLawAmendmentRecorded(root));
@@ -538,27 +631,6 @@ export function runGate2(): GateResult {
         pass: true,
         message: "REALITY.md matches the tree",
         file: "REALITY.md",
-      });
-    }
-  }
-
-  // Check TRACE.md has dated entries with gate status
-  const traceContent = readFile(root, "TRACE.md");
-  if (traceContent) {
-    const hasEvidence =
-      /^- \d{4}-\d{2}-\d{2} .*gate_1=.*gate_2=/m.test(traceContent);
-    if (hasEvidence) {
-      checks.push({
-        pass: true,
-        message: "TRACE.md has dated gate evidence with gate_1 and gate_2",
-        file: "TRACE.md",
-      });
-    } else {
-      checks.push({
-        pass: false,
-        message:
-          "TRACE.md missing dated gate evidence with gate_1 and gate_2",
-        file: "TRACE.md",
       });
     }
   }

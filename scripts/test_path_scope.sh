@@ -73,7 +73,11 @@ GATE="$ROOT/scripts/gate_enforce.sh"
 
 make_repo() {
   local d; d="$(mktemp -d)"
-  cp "$ROOT"/{CLAUDE.md,LAW.md,GATE.md,REALITY.md,TRACE.md,DECISIONS.md} "$d/"
+  cp "$ROOT"/{CLAUDE.md,LAW.md,GATE.md,REALITY.md} "$d/"
+  mkdir -p "$d/trace" "$d/decisions"
+  printf '# trace/\nrules\n' > "$d/trace/README.md"
+  printf '# decisions/\nrules\n' > "$d/decisions/README.md"
+  printf '# 2026-01-01 — SEED\n\nseed entry; gate_1=PASS, gate_2=PASS.\n' > "$d/trace/2026-01-01-seed.md"
   mkdir -p "$d/scripts"
   cp "$ROOT"/scripts/*.sh "$d/scripts/"   # whole dir: gate_enforce.sh sources siblings
   sed -i 's/Last gate status: `UNKNOWN`/Last gate status: `PASS`/' "$d/REALITY.md"
@@ -154,7 +158,11 @@ rm -rf "$d"
 
 # non-git workspace cannot be verified -> fail closed
 d="$(mktemp -d)"
-cp "$ROOT"/{CLAUDE.md,LAW.md,GATE.md,REALITY.md,TRACE.md,DECISIONS.md} "$d/"
+cp "$ROOT"/{CLAUDE.md,LAW.md,GATE.md,REALITY.md} "$d/"
+  mkdir -p "$d/trace" "$d/decisions"
+  printf '# trace/\nrules\n' > "$d/trace/README.md"
+  printf '# decisions/\nrules\n' > "$d/decisions/README.md"
+  printf '# 2026-01-01 — SEED\n\nseed entry; gate_1=PASS, gate_2=PASS.\n' > "$d/trace/2026-01-01-seed.md"
 mkdir -p "$d/scripts"
 cp "$ROOT"/scripts/*.sh "$d/scripts/"
 printf '%s\n' "$path_md_scoped" > "$d/PATH.md"

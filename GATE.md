@@ -18,7 +18,7 @@ Does the intended PATH conform to LAW?
 - PATH contains ambiguous action that can alter architecture without review.
 
 ### On FAIL
-- Record FAIL in `TRACE.md`.
+- Record FAIL in a new `trace/` entry.
 - Stop or produce a new PATH and re-run Gate 1.
 
 ## Gate 2: REALITY Admissibility (Before Accept/Merge)
@@ -31,11 +31,12 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 - Every changed file is inside the `allowed_paths` of the active step or of a
   completed step, verified against the real git diff.
 - No changed file matches a `forbidden_paths` pattern.
-- `TRACE.md` and `DECISIONS.md` have only grown: every version has the previous
-  one as an exact byte prefix.
+- `trace/` and `decisions/` have only grown: every entry that existed at the
+  base is byte-identical now, and was not touched in any commit on the way.
+- Every `trace/` entry states `gate_1` and `gate_2`.
 - `REALITY.md` matches the tree: its generated artifact region is exactly what
   regeneration would produce.
-- If `LAW.md` changed, `DECISIONS.md` carries a new entry naming it with a
+- If `LAW.md` changed, `decisions/` carries a new entry naming it with a
   recorded `approved_by`.
 - No forbidden LAW condition appears in REALITY.
 - TRACE includes exact files changed and outcomes.
@@ -44,9 +45,10 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 ### FAIL if
 - REALITY deviates from PATH without explicit approval.
 - A changed file falls outside every declared `allowed_paths` pattern.
-- Any version of `TRACE.md` or `DECISIONS.md` in the range rewrote, reordered,
-  truncated or deleted an earlier entry.
-- `LAW.md` changed without a new approved `DECISIONS.md` entry naming it.
+- An entry in `trace/` or `decisions/` was modified, deleted, renamed or
+  replaced.
+- A legacy `TRACE.md` or `DECISIONS.md` is still present, unmigrated.
+- `LAW.md` changed without a new approved `decisions/` entry naming it.
 - `REALITY.md` is stale: a tracked file is unrecorded, or a recorded artifact is
   no longer tracked.
 - The active step declares no scope at all, or the workspace is not a git
@@ -64,31 +66,36 @@ from git and matches it against the patterns declared in `PATH.md`:
 - Admissible surface = union of `allowed_paths` over every completed step and
   the active step, because a branch diff is the cumulative result of the steps
   already executed.
-- `REALITY.md` and `TRACE.md` are always admissible; the loop mandates them.
+- `REALITY.md` and `trace/**` are always admissible; the loop mandates them.
 - `PATH.md` is not. Widening the route is itself a declared act.
 
 ### Append-Only Enforcement (Mechanical)
-`LAW.md` forbids rewriting prior TRACE history. Gate 2 verifies it rather than
-trusting it: every version of `TRACE.md` must have the previous version as an
-exact byte prefix.
+`LAW.md` forbids rewriting prior history. The two records are directories of one
+file per entry, so append-only is per-file immutability rather than a byte
+prefix: an entry that existed at the base must be byte-identical now.
 
-- The whole commit chain `base..HEAD` is walked, then the working tree. A
-  branch that rewrites TRACE in one commit and restores it in the next has
-  still destroyed the audit trail, and comparing only the endpoints would
-  miss it.
-- A file absent at a revision counts as empty, so deleting `TRACE.md` reports
-  as truncation.
-- Creating the file where none existed is admissible; the empty prefix is a
-  prefix of anything.
-- The same rule applies to `DECISIONS.md`.
+- Additions are the only admissible change. Modify, delete, rename, copy over or
+  change the type of an existing entry and Gate 2 names the file.
+- Every commit in `base..HEAD` is walked as well as the endpoints. A branch that
+  rewrites an entry in one commit and restores it in the next has still tampered
+  with the record, and comparing only the endpoints would call that clean.
+- Only entries already in the record at the base are protected. An entry added
+  on this branch may still be corrected before it merges.
+- `README.md` in each directory holds that directory's rules, not an entry, and
+  is exempt.
+
+**Why a directory.** A single append-only file is correct but not usable: two
+agents, or two branches, appending on the same day collide on the last line of
+the same file every time. One file per entry removes the conflict by
+construction — two additions to a directory do not touch the same bytes.
 
 ### Policy Change Control (Mechanical)
 `LAW.md` is the policy. It may not change without a recorded approval:
 
-- If the diff touches `LAW.md`, `DECISIONS.md` must carry a **newly appended**
-  entry naming `LAW.md` with a non-empty `approved_by`. A pre-existing entry
-  does not justify a later amendment, and an approval recorded in one entry does
-  not carry over to a different entry's target.
+- If the diff touches `LAW.md`, `decisions/` must carry a **newly added** file
+  naming `LAW.md` with a non-empty `approved_by`. A pre-existing entry does not
+  justify a later amendment, and an approval recorded in one entry does not
+  carry over to a different entry's target.
 - An `approved_by` that is empty, a placeholder or `TBD` is not an approval.
 
 ### REALITY Currency (Mechanical)
@@ -113,5 +120,5 @@ request: a property of the repository, not of the canon. Treat the check as
 tamper-evidence, not authentication.
 
 ### On FAIL
-- Record FAIL in `TRACE.md`.
+- Record FAIL in a new `trace/` entry.
 - Stop, then either revert pathologically unsafe change or redefine PATH and re-run gates.

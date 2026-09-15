@@ -3,6 +3,20 @@ import * as fs from "fs";
 import * as path from "path";
 import { parsePathMd, parseRealityMd, parseTraceMd, todayISO } from "./parsers";
 import { GOVERNANCE_FILES } from "./templates";
+import { shardFileName } from "./shardRules";
+
+/** The newest entry by filename, which sorts chronologically. */
+function latestTraceEntry(root: string): string {
+  const dir = path.join(root, "trace");
+  if (!fs.existsSync(dir)) {
+    return path.join(dir, "missing.md");
+  }
+  const entries = fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".md") && f !== "README.md")
+    .sort();
+  return path.join(dir, entries[entries.length - 1] ?? "missing.md");
+}
 
 function workspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -15,9 +29,9 @@ export async function appendTraceEntry(): Promise<void> {
     return;
   }
 
-  const tracePath = path.join(root, "TRACE.md");
-  if (!fs.existsSync(tracePath)) {
-    vscode.window.showErrorMessage("TRACE.md not found. Run 'Initialize Governance' first.");
+  const traceDir = path.join(root, "trace");
+  if (!fs.existsSync(traceDir)) {
+    vscode.window.showErrorMessage("trace/ not found. Run 'Initialize Governance' first.");
     return;
   }
 
@@ -68,13 +82,25 @@ export async function appendTraceEntry(): Promise<void> {
   }
 
   const date = todayISO();
-  const entry = `- ${date} — ${label}: ${description}; gate_1=${gate1} (${gate1Reason}), gate_2=${gate2} (${gate2Reason}).`;
+  const entry = `# ${date} — ${label}
 
-  const content = fs.readFileSync(tracePath, "utf-8");
-  const newContent = content.trimEnd() + "\n" + entry + "\n";
-  fs.writeFileSync(tracePath, newContent, "utf-8");
+${description}
 
-  vscode.window.showInformationMessage(`TRACE entry appended: ${label}`);
+- \`gate_1\`: ${gate1} — ${gate1Reason}
+- \`gate_2\`: ${gate2} — ${gate2Reason}
+`;
+
+  // A new file per entry, never an edit to an existing one: that is what makes
+  // the record append-only and what keeps parallel agents from colliding.
+  let name = shardFileName(date, label);
+  let n = 2;
+  while (fs.existsSync(path.join(traceDir, name))) {
+    name = shardFileName(date, label).replace(/\.md$/, `-${n}.md`);
+    n += 1;
+  }
+  fs.writeFileSync(path.join(traceDir, name), entry, "utf-8");
+
+  vscode.window.showInformationMessage(`TRACE entry written: trace/${name}`);
 }
 
 export async function updateReality(): Promise<void> {
@@ -102,9 +128,9 @@ export async function updateReality(): Promise<void> {
     activeStep = parsed.activeStep || "P1";
   }
 
-  // Get last gate status from TRACE.md
+  // Get last gate status from the most recent trace entry
   let gateStatus = "UNKNOWN";
-  const traceFile = path.join(root, "TRACE.md");
+  const traceFile = latestTraceEntry(root);
   if (fs.existsSync(traceFile)) {
     const traceContent = fs.readFileSync(traceFile, "utf-8");
     const parsed = parseTraceMd(traceContent);
