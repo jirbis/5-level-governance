@@ -152,13 +152,36 @@ Define the admissible implementation route under LAW.
 - Out of scope: \`${vars.outOfScope ?? '<set explicit exclusions>'}\`
 ${vars.languages?.length ? `- Tech stack: ${vars.languages.join(", ")}${vars.testFrameworks?.length ? ` (tests: ${vars.testFrameworks.join(", ")})` : ""}` : ""}
 
+## Step Schema
+Each step declares the file scope it is permitted to touch. Gate 2 checks the
+real git diff against these patterns, so an undeclared scope admits no change.
+
+\`\`\`
+- [ ] \`P3\` Do the thing.
+      allowed_paths: src/**, Makefile
+      forbidden_paths: LAW.md
+\`\`\`
+
+- Patterns are anchored at the workspace root and must match the whole path.
+- \`**\` matches any number of path segments; \`*\` and \`?\` never cross \`/\`.
+- A pattern ending in \`/\` means that directory and everything under it.
+- \`forbidden_paths\` wins over \`allowed_paths\`.
+- \`REALITY.md\` and \`TRACE.md\` are always writable: the loop mandates them.
+- \`PATH.md\` is NOT implicitly writable. Widening the route must be declared.
+
 ## Step List (Deterministic Order)
-- [ ] \`P1\` Define/confirm goal and constraints.
+- [ ] \`P1\` Define/confirm goal, constraints and per-step file scopes.
+      allowed_paths: PATH.md
 - [ ] \`P2\` Run Gate 1 on planned changes.
+      allowed_paths: PATH.md
 - [ ] \`P3\` Execute smallest admissible change set.
+      allowed_paths: <set the files this step may touch>
 - [ ] \`P4\` Update REALITY and TRACE.
+      allowed_paths: PATH.md
 - [ ] \`P5\` Run Gate 2 on resulting state.
+      allowed_paths: PATH.md
 - [ ] \`P6\` Apply CODIFY decision.
+      allowed_paths: PATH.md, CODIFY.md
 
 ## Current Pointer
 - \`active_step\`: \`P1\`
@@ -203,12 +226,18 @@ Does REALITY conform to PATH and LAW, with TRACE evidence?
 
 ### PASS if
 - Produced artifacts match permitted PATH steps.
+- Every changed file is inside the \`allowed_paths\` of the active step or of a
+  completed step, verified against the real git diff.
+- No changed file matches a \`forbidden_paths\` pattern.
 - No forbidden LAW condition appears in REALITY.
 - TRACE includes exact files changed and outcomes.
 - Deviations are documented and resolved.
 
 ### FAIL if
 - REALITY deviates from PATH without explicit approval.
+- A changed file falls outside every declared \`allowed_paths\` pattern.
+- The active step declares no scope at all, or the workspace is not a git
+  repository: scope that cannot be verified is not scope.
 - TRACE is incomplete or missing.
 - LAW was implicitly changed.
 

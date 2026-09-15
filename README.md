@@ -33,4 +33,45 @@ Rule: if it is not written in `LAW.md`, `PATH.md`, `GATE.md`, `REALITY.md`, or `
 - Run all checks: `make gate`
 - Run Gate 1 only: `make gate1`
 - Run Gate 2 only: `make gate2`
+- Run the test suite: `make test`
 - Direct script usage: `bash ./scripts/gate_enforce.sh [gate1|gate2|all]`
+
+## Scope Enforcement
+
+`No silent scope expansion` is a mechanical check, not a promise. Each PATH step
+declares the files it may touch, and Gate 2 matches the real git diff against it:
+
+```markdown
+- [ ] `P3` Replace the retry backoff.
+      allowed_paths: src/net/**, tests/net/**
+      forbidden_paths: src/net/legacy.rs
+```
+
+Touch anything outside that set and Gate 2 fails with the offending path:
+
+```
+FAIL: PATH scope: out-of-scope file changed: src/auth/session.rs
+      (not matched by any allowed_paths of step 'P3' or completed steps)
+```
+
+Pattern rules:
+
+| Pattern | Matches |
+| --- | --- |
+| `src/**` | everything under `src/`, at any depth |
+| `src/*.ts` | `.ts` files directly in `src/`, not in subdirectories |
+| `**/test.py` | `test.py` at any depth, including the root |
+| `docs/` | shorthand for `docs/**` |
+
+Patterns are anchored at the workspace root and must match the whole path.
+`forbidden_paths` beats `allowed_paths`.
+
+The check fails closed. If the active step declares no `allowed_paths`, or the
+workspace is not a git repository, no change is admissible: scope that cannot be
+verified is not scope. `REALITY.md` and `TRACE.md` are always writable because
+the execution loop mandates writing them; `PATH.md` is not, so widening the
+route is itself a visible, declared act.
+
+Set `GOVERNANCE_DIFF_BASE` (or the `governance.diffBase` setting in the
+extension) to control what the diff is taken against. The default is the
+merge-base with the default branch, falling back to `HEAD`.

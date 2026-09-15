@@ -10,3 +10,8 @@ gate1:
 
 gate2:
 	bash ./scripts/gate_enforce.sh gate2
+
+.PHONY: test
+test:
+	bash ./scripts/test_path_scope.sh
+	node ./scripts/test_extension_parity.mjs

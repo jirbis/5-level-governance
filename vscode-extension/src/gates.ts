@@ -1,7 +1,13 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { execFileSync } from "child_process";
 import { GOVERNANCE_FILES } from "./templates";
+import {
+  IMPLICIT_ALLOWED_PATHS,
+  parsePathMd,
+  pathMatchesGlob,
+} from "./parsers";
 
 export interface Check {
   pass: boolean;
@@ -60,6 +66,156 @@ function findLineAndColumn(
     }
   }
   return undefined;
+}
+
+function git(root: string, args: string[]): string | null {
+  try {
+    return execFileSync("git", ["-C", root, ...args], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return null;
+  }
+}
+
+function diffBase(root: string): string {
+  const configured = vscode.workspace
+    .getConfiguration("governance")
+    .get<string>("diffBase");
+  if (configured) {
+    return configured;
+  }
+  for (const ref of ["origin/HEAD", "origin/main", "origin/master", "main", "master"]) {
+    if (git(root, ["rev-parse", "--verify", "--quiet", ref]) === null) {
+      continue;
+    }
+    const mergeBase = git(root, ["merge-base", "HEAD", ref])?.trim();
+    if (mergeBase) {
+      return mergeBase;
+    }
+  }
+  return "HEAD";
+}
+
+function changedFiles(root: string, base: string): string[] {
+  const out = [
+    git(root, ["diff", "--name-only", base, "--"]),
+    git(root, ["diff", "--name-only", "--cached", base, "--"]),
+    git(root, ["ls-files", "--others", "--exclude-standard"]),
+  ];
+  const files = new Set<string>();
+  for (const chunk of out) {
+    for (const line of (chunk ?? "").split("\n")) {
+      const f = line.trim();
+      if (f) {
+        files.add(f);
+      }
+    }
+  }
+  return [...files].sort();
+}
+
+/**
+ * Bind the declared PATH scope to the real git diff.
+ *
+ * The admissible surface is the union of every completed step plus the active
+ * step: a branch diff is the cumulative result of the steps already executed.
+ * Undeclared scope and unverifiable workspaces fail closed - a control that
+ * can be bypassed by omitting a field is not a control.
+ */
+function checkPathScope(root: string): Check[] {
+  const checks: Check[] = [];
+
+  if (git(root, ["rev-parse", "--is-inside-work-tree"]) === null) {
+    checks.push({
+      pass: false,
+      message: "PATH scope: not a git repository, scope cannot be verified",
+    });
+    return checks;
+  }
+
+  const pathContent = readFile(root, "PATH.md");
+  if (!pathContent) {
+    checks.push({ pass: false, message: "PATH scope: PATH.md is missing", file: "PATH.md" });
+    return checks;
+  }
+
+  const parsed = parsePathMd(pathContent);
+  if (!parsed.activeStep) {
+    checks.push({
+      pass: false,
+      message: "PATH scope: PATH.md has no resolvable active_step",
+      file: "PATH.md",
+    });
+    return checks;
+  }
+
+  const inForce = parsed.steps.filter((s) => s.done || s.id === parsed.activeStep);
+  const allowed = inForce.flatMap((s) => s.allowedPaths);
+  const forbidden = inForce.flatMap((s) => s.forbiddenPaths);
+
+  if (allowed.length === 0) {
+    const loc = findLineNumber(pathContent, /`active_step`/);
+    checks.push({
+      pass: false,
+      message:
+        `PATH scope: no allowed_paths declared for active step '${parsed.activeStep}' ` +
+        "or any completed step; scope is undeclared, so no change is admissible",
+      file: "PATH.md",
+      line: loc,
+    });
+    return checks;
+  }
+
+  const effective = [...allowed, ...IMPLICIT_ALLOWED_PATHS];
+  const base = diffBase(root);
+  const changed = changedFiles(root, base);
+
+  if (changed.length === 0) {
+    checks.push({
+      pass: true,
+      message: `PATH scope: no changes against ${base.slice(0, 12)}, nothing to place in scope`,
+      file: "PATH.md",
+    });
+    return checks;
+  }
+
+  let clean = true;
+  for (const file of changed) {
+    const breach = forbidden.find((g) => pathMatchesGlob(file, g));
+    if (breach) {
+      checks.push({
+        pass: false,
+        message: `PATH scope: forbidden file changed: ${file} (matches forbidden_paths: ${breach})`,
+        file,
+      });
+      clean = false;
+      continue;
+    }
+    if (!effective.some((g) => pathMatchesGlob(file, g))) {
+      checks.push({
+        pass: false,
+        message:
+          `PATH scope: out-of-scope file changed: ${file} (not matched by any ` +
+          `allowed_paths of step '${parsed.activeStep}' or completed steps)`,
+        file,
+      });
+      clean = false;
+    }
+  }
+
+  if (clean) {
+    checks.push({
+      pass: true,
+      message:
+        `PATH scope: all ${changed.length} changed file(s) are inside declared ` +
+        `allowed_paths (base ${base.slice(0, 12)})`,
+      file: "PATH.md",
+    });
+  }
+
+  return checks;
 }
 
 export function runGate1(): GateResult {
@@ -195,6 +351,9 @@ export function runGate2(): GateResult {
       });
     }
   }
+
+  // Bind the declared PATH scope to the real git diff
+  checks.push(...checkPathScope(root));
 
   // Check REALITY.md gate status is not UNKNOWN
   const realityContent = readFile(root, "REALITY.md");

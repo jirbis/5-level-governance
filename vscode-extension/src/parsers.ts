@@ -2,6 +2,59 @@ export interface PathStep {
   id: string;
   label: string;
   done: boolean;
+  allowedPaths: string[];
+  forbiddenPaths: string[];
+}
+
+/**
+ * Always writable: the execution loop mandates writing these every run.
+ * PATH.md is deliberately absent - widening the route must be declared in scope.
+ */
+export const IMPLICIT_ALLOWED_PATHS = ["REALITY.md", "TRACE.md"];
+
+/**
+ * Convert a PATH scope glob into a RegExp anchored at the workspace root.
+ * `**` crosses path segments, `*` and `?` do not, `dir/` means `dir/**`.
+ */
+export function globToRegExp(glob: string): RegExp {
+  let pat = glob.endsWith("/") ? `${glob}**` : glob;
+  let out = "";
+  let i = 0;
+  while (i < pat.length) {
+    if (pat[i] === "*" && pat[i + 1] === "*") {
+      if (pat[i + 2] === "/") {
+        out += "(?:.*/)?";
+        i += 3;
+      } else {
+        out += ".*";
+        i += 2;
+      }
+      continue;
+    }
+    const ch = pat[i];
+    if (ch === "*") {
+      out += "[^/]*";
+    } else if (ch === "?") {
+      out += "[^/]";
+    } else if (".+()[]{}^$|\\".includes(ch)) {
+      out += `\\${ch}`;
+    } else {
+      out += ch;
+    }
+    i += 1;
+  }
+  return new RegExp(`^${out}$`);
+}
+
+export function pathMatchesGlob(filePath: string, glob: string): boolean {
+  return globToRegExp(glob).test(filePath);
+}
+
+function splitPatterns(value: string): string[] {
+  return value
+    .split(",")
+    .map((p) => p.trim().replace(/^`|`$/g, ""))
+    .filter((p) => p.length > 0);
 }
 
 export interface ParsedPath {
@@ -40,17 +93,56 @@ export function parsePathMd(content: string): ParsedPath {
   const activeStepMatch = content.match(/`active_step`:\s*`(\w+)`/);
   const activeStep = activeStepMatch ? activeStepMatch[1] : null;
 
-  // Extract steps
+  // Extract steps. Only the Step List section counts, and fenced code blocks
+  // are skipped so that documented examples are never parsed as real steps.
   const steps: PathStep[] = [];
-  const stepRegex = /^- \[([ x])\] `(\w+)` (.+)/;
+  const stepRegex = /^- \[([ xX])\]\s*`([^`]+)`\s*(.*)/;
+  let fence = false;
+  let inList = false;
+  let current: PathStep | null = null;
   for (const line of lines) {
+    if (/^```/.test(line)) {
+      fence = !fence;
+      continue;
+    }
+    if (fence) {
+      continue;
+    }
+    if (/^## Step List/.test(line)) {
+      inList = true;
+      continue;
+    }
+    if (/^## /.test(line)) {
+      inList = false;
+      current = null;
+      continue;
+    }
+    if (!inList) {
+      continue;
+    }
     const match = line.match(stepRegex);
     if (match) {
-      steps.push({
+      current = {
         id: match[2],
         label: match[3].trim().replace(/\.$/, ""),
-        done: match[1] === "x",
-      });
+        done: match[1].toLowerCase() === "x",
+        allowedPaths: [],
+        forbiddenPaths: [],
+      };
+      steps.push(current);
+      continue;
+    }
+    if (!current) {
+      continue;
+    }
+    const allowed = line.match(/^\s+allowed_paths:\s*(.*)$/);
+    if (allowed) {
+      current.allowedPaths.push(...splitPatterns(allowed[1]));
+      continue;
+    }
+    const forbidden = line.match(/^\s+forbidden_paths:\s*(.*)$/);
+    if (forbidden) {
+      current.forbiddenPaths.push(...splitPatterns(forbidden[1]));
     }
   }
 

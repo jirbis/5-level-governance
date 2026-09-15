@@ -4,6 +4,9 @@ set -euo pipefail
 MODE="${1:-all}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# shellcheck source=scripts/path_scope.sh
+source "$ROOT/scripts/path_scope.sh"
+
 fail_count=0
 
 pass() {
@@ -67,9 +70,103 @@ run_gate1() {
   fi
 }
 
+check_path_scope() {
+  if ! command -v git >/dev/null 2>&1; then
+    fail "PATH scope: git is unavailable, scope cannot be verified"
+    return
+  fi
+  if ! git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    fail "PATH scope: not a git repository, scope cannot be verified"
+    return
+  fi
+  if [[ ! -f "$ROOT/PATH.md" ]]; then
+    fail "PATH scope: PATH.md is missing"
+    return
+  fi
+
+  local active
+  active="$(sed -n 's/^- `active_step`: `\([^`]*\)`.*/\1/p' "$ROOT/PATH.md" | head -n1)"
+  if [[ -z "$active" ]]; then
+    fail "PATH scope: PATH.md has no resolvable active_step"
+    return
+  fi
+
+  local -a allow=() forbid=()
+  local kind pat
+  while IFS=$'\t' read -r kind pat; do
+    if [[ -z "${pat:-}" ]]; then
+      continue
+    fi
+    case "$kind" in
+      allow)  allow+=("$pat") ;;
+      forbid) forbid+=("$pat") ;;
+    esac
+  done < <(scope_rules "$ROOT/PATH.md" "$active")
+
+  if (( ${#allow[@]} == 0 )); then
+    fail "PATH scope: no allowed_paths declared for active step '$active' or any completed step; scope is undeclared, so no change is admissible"
+    return
+  fi
+  allow+=("${SCOPE_IMPLICIT_ALLOW[@]}")
+
+  local base
+  base="$(scope_diff_base "$ROOT")"
+
+  local -a changed=()
+  local f
+  while IFS= read -r f; do
+    if [[ -n "$f" ]]; then
+      changed+=("$f")
+    fi
+  done < <(scope_changed_files "$ROOT" "$base")
+
+  if (( ${#changed[@]} == 0 )); then
+    pass "PATH scope: no changes against ${base:0:12}, nothing to place in scope"
+    return
+  fi
+
+  local -a violations=() breaches=()
+  local g ok
+  for f in "${changed[@]}"; do
+    ok=0
+    for g in "${forbid[@]:-}"; do
+      [[ -z "$g" ]] && continue
+      if scope_path_matches "$f" "$g"; then
+        breaches+=("$f (matches forbidden_paths: $g)")
+        ok=2
+        break
+      fi
+    done
+    [[ $ok -eq 2 ]] && continue
+    for g in "${allow[@]}"; do
+      if scope_path_matches "$f" "$g"; then
+        ok=1
+        break
+      fi
+    done
+    (( ok == 1 )) || violations+=("$f")
+  done
+
+  for f in "${breaches[@]:-}"; do
+    if [[ -n "$f" ]]; then
+      fail "PATH scope: forbidden file changed: $f"
+    fi
+  done
+  for f in "${violations[@]:-}"; do
+    if [[ -n "$f" ]]; then
+      fail "PATH scope: out-of-scope file changed: $f (not matched by any allowed_paths of step '$active' or completed steps)"
+    fi
+  done
+
+  if (( ${#violations[@]} == 0 && ${#breaches[@]} == 0 )); then
+    pass "PATH scope: all ${#changed[@]} changed file(s) are inside declared allowed_paths (base ${base:0:12})"
+  fi
+}
+
 run_gate2() {
   echo "== Gate 2: REALITY Admissibility =="
   check_required_files
+  check_path_scope
 
   if rg -n 'Last gate status: `UNKNOWN`' "$ROOT/REALITY.md" >/dev/null; then
     fail "REALITY.md still has unknown gate status"
