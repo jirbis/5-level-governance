@@ -82,6 +82,26 @@ function git(root: string, args: string[]): string | null {
   }
 }
 
+/**
+ * The limit only when a human actually set it.
+ *
+ * `get()` returns the default declared in package.json, so an untouched setting
+ * still yields 200 and would mask REALITY_FILE_LIMIT from the environment. Only
+ * an inspected value that is present somewhere in the settings hierarchy counts
+ * as configured.
+ */
+export function explicitFileLimit(): number | undefined {
+  const inspected = vscode.workspace
+    .getConfiguration("governance")
+    .inspect<number>("realityFileLimit");
+  return (
+    inspected?.workspaceFolderValue ??
+    inspected?.workspaceValue ??
+    inspected?.globalValue ??
+    undefined
+  );
+}
+
 function baseResolves(root: string, base: string): boolean {
   return (
     base.length > 0 &&
@@ -672,10 +692,11 @@ export function runGate2(): GateResult {
           .filter((f) => f.length > 0)
       ),
     ].sort();
-    const limit = vscode.workspace
-      .getConfiguration("governance")
-      .get<number>("realityFileLimit");
-    const staleness = realityStaleness(realityContent, tracked, realityFileLimit(limit));
+    const staleness = realityStaleness(
+      realityContent,
+      tracked,
+      realityFileLimit(explicitFileLimit())
+    );
     if (staleness.stale) {
       const loc = findLineNumber(realityContent, /generated:artifacts/);
       checks.push({

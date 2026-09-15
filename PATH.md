@@ -135,9 +135,21 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: vscode-extension/src/*.ts, vscode-extension/package.json, scripts/**, PATH.md
 - [x] `P54` Update REALITY, record the work, run Gate 2.
       allowed_paths: PATH.md, trace/**
+- [x] `P55` Declare scope for the owner review on pull request #6.
+      allowed_paths: PATH.md
+- [x] `P56` Make record writes unconditionally non-destructive, independent of `--force`.
+      allowed_paths: scripts/**, PATH.md
+- [x] `P57` Distinguish an absent `test` target from a broken one, and fail the report on the latter.
+      allowed_paths: scripts/**, PATH.md
+- [x] `P58` Install a workflow that runs the installed runtime, with no extension build.
+      allowed_paths: scripts/**, PATH.md
+- [x] `P59` Let the environment limit apply when the VS Code setting was never explicitly set.
+      allowed_paths: vscode-extension/src/*.ts, scripts/**, PATH.md
+- [x] `P60` Update REALITY, record the fixes, run Gate 2.
+      allowed_paths: PATH.md, trace/**
 
 ## Current Pointer
-- `active_step`: `P54`
+- `active_step`: `P60`
 
 ## Blocking Questions
 - (none)

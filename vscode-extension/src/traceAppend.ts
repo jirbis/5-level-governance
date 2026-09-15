@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { todayISO } from "./parsers";
 import { regenerateReality, snapshotFacts, workspaceFiles } from "./realityIo";
+import { explicitFileLimit } from "./gates";
 import { GOVERNANCE_FILES } from "./templates";
 import { shardFileName } from "./shardRules";
 
@@ -116,9 +117,9 @@ export async function updateReality(): Promise<void> {
     return;
   }
 
-  const limit = vscode.workspace
-    .getConfiguration("governance")
-    .get<number>("realityFileLimit");
+  // Only an explicitly set value; the declared default would mask the
+  // environment variable the shell generator reads.
+  const limit = explicitFileLimit();
 
   // Refuse rather than overwrite. The hand-written sections are the reason only
   // part of this file is generated, and a template would discard them.

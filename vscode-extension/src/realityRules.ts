@@ -16,10 +16,14 @@ export const ARTIFACTS_CLOSE = "<!-- /generated:artifacts -->";
 export const REALITY_FILE_LIMIT_DEFAULT = 200;
 
 /**
- * The effective limit. The shell generator reads REALITY_FILE_LIMIT from the
- * environment, so this must too: a limit honoured by the generator but not by
- * the checker means a freshly generated REALITY passes one gate and fails the
- * other.
+ * The effective limit, in precedence order: an explicitly configured value,
+ * then REALITY_FILE_LIMIT from the environment, then the default.
+ *
+ * The shell generator reads the environment variable, so this must too: a limit
+ * honoured by the generator but not by the checker means a freshly generated
+ * REALITY passes one gate and fails the other. Callers must pass only a value a
+ * human actually set - a settings default looks identical to a real choice here
+ * and would mask the environment.
  */
 export function realityFileLimit(configured?: number): number {
   if (typeof configured === "number" && Number.isFinite(configured) && configured > 0) {

@@ -19,15 +19,44 @@ gate_rc=$?
 tests_out=""
 tests_rc=0
 have_tests=0
-if (( RUN_TESTS == 1 )); then
-  # An installed workspace has no `test` target until the project adds one.
-  # Reporting FAIL for tests that were never configured would teach people to
-  # ignore the verdict.
-  if make -C "$ROOT" -n test >/dev/null 2>&1; then
-    have_tests=1
-    tests_out="$(make -C "$ROOT" test 2>&1)"
-    tests_rc=$?
+
+# An installed workspace has no `test` target until the project adds one, and
+# reporting FAIL for tests that were never configured would teach people to
+# ignore the verdict. But a dry run also fails when the target EXISTS and cannot
+# run, and calling that "not configured" would hide a broken test setup behind a
+# green verdict - the same vacuous pass the diff-base bug produced.
+#
+# The two are distinguishable: make names the missing target, and adds
+# "needed by" when the missing thing is a prerequisite of an existing target.
+test_target_state() {
+  local out rc
+  out="$(make -C "$ROOT" -n test 2>&1)"
+  rc=$?
+  if (( rc == 0 )); then
+    printf 'present'
+    return
   fi
+  if grep -q "No rule to make target" <<<"$out" && ! grep -q "needed by" <<<"$out"; then
+    printf 'absent'
+    return
+  fi
+  printf 'broken'
+}
+
+if (( RUN_TESTS == 1 )); then
+  case "$(test_target_state)" in
+    present)
+      have_tests=1
+      tests_out="$(make -C "$ROOT" test 2>&1)"
+      tests_rc=$?
+      ;;
+    broken)
+      have_tests=1
+      tests_rc=1
+      tests_out="$(make -C "$ROOT" test 2>&1)"
+      ;;
+    absent) ;;
+  esac
 fi
 
 fails="$(grep '^FAIL: ' <<<"$gate_out" || true)"

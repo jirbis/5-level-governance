@@ -61,6 +61,25 @@ copy() {  # copy <relative-path-in-src> [relative-path-in-dest]
   put "$dst" < "$SRC/$rel"
 }
 
+# Records are append-only by rule, so a record write never overwrites - not even
+# under --force, which exists to refresh doctrine, not to erase evidence. A
+# same-day collision takes the next free name rather than replacing the entry.
+put_record() {
+  local rel="$1" full="$DEST/$1" base ext n=2
+  if [[ -e "$full" ]]; then
+    base="${rel%.md}"
+    while [[ -e "$DEST/$base-$n.md" ]]; do
+      n=$(( n + 1 ))
+    done
+    rel="$base-$n.md"
+    full="$DEST/$rel"
+  fi
+  mkdir -p "$(dirname "$full")"
+  cat >"$full"
+  printf '  write  %s\n' "$rel"
+  written=$(( written + 1 ))
+}
+
 echo "Installing governance into $DEST"
 echo
 
@@ -180,7 +199,7 @@ echo "Records:"
 mkdir -p "$DEST/trace" "$DEST/decisions"
 copy "trace/README.md"
 copy "decisions/README.md"
-put "trace/$(date -u +%Y-%m-%d)-init.md" <<EOF
+put_record "trace/$(date -u +%Y-%m-%d)-init.md" <<EOF
 # $(date -u +%Y-%m-%d) — INIT
 
 Installed governance: canon files, the \`trace/\` and \`decisions/\` records, and
@@ -193,7 +212,96 @@ EOF
 if (( WITH_CI == 1 )); then
   echo
   echo "CI:"
-  copy ".github/workflows/governance-gate.yml"
+  # Purpose-built for an installed project: it runs the installed shell runtime
+  # and nothing else. This repository's own workflow builds the VS Code
+  # extension, which the installer deliberately does not copy, so shipping that
+  # one would fail the job before it ever reached the gates.
+  put ".github/workflows/governance-gate.yml" <<'CI'
+name: Governance Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Gate 2 diffs against the merge-base, so a shallow clone would leave
+          # it nothing to compare and the scope check would pass vacuously.
+          fetch-depth: 0
+
+      - name: Resolve diff base
+        id: base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${BASE_REF:-}" ]]; then
+            git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+            base="$(git merge-base "origin/$BASE_REF" HEAD)"
+          else
+            base="$(git rev-parse 'HEAD^' 2>/dev/null || git rev-parse HEAD)"
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Run gates and render report
+        id: report
+        env:
+          GOVERNANCE_DIFF_BASE: ${{ steps.base.outputs.base }}
+          # Outside the checkout: a report written into the workspace is an
+          # untracked file the gates would correctly reject as out of scope.
+          REPORT: ${{ runner.temp }}/governance-report.md
+        run: |
+          set +e
+          bash ./scripts/gate_report.sh > "$REPORT"
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          echo "report=$REPORT" >> "$GITHUB_OUTPUT"
+          cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        # A fork pull request gets a read-only token, so commenting fails there
+        # through no fault of the change. The summary above is always written.
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: ${{ steps.report.outputs.report }}
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+            const marker = '<!-- governance-gate -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const existing = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            const mine = existing.find(
+              (c) => c.user.type === 'Bot' && c.body && c.body.includes(marker)
+            );
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Verdict
+        run: |
+          if [[ "${{ steps.report.outputs.rc }}" != "0" ]]; then
+            echo "::error::Governance gate failed. See the job summary or the pull request comment."
+            exit 1
+          fi
+          echo "Governance gate passed."
+CI
 fi
 
 echo

@@ -92,6 +92,53 @@ grep -q 'skip ' <<<"$out2" && ok "reports what it skipped" || no "should report 
 rm -rf "$d"
 
 echo
+echo "== --force refreshes doctrine but never erases evidence =="
+d="$(new_project)"
+bash "$ROOT/scripts/install.sh" "$d" >/dev/null 2>&1
+init_entry="$(find "$d/trace" -name '*-init.md' | head -n1)"
+printf '\nextra evidence added by hand\n' >> "$init_entry"
+printf '# custom doctrine\n' > "$d/LAW.md"
+out3="$(bash "$ROOT/scripts/install.sh" "$d" --force 2>&1)"
+grep -q 'extra evidence added by hand' "$init_entry" \
+  && ok "--force leaves an existing record entry untouched" \
+  || no "--force erased evidence from a record entry"
+grep -q 'Non-Negotiables' "$d/LAW.md" && ok "--force does refresh doctrine" || no "--force should refresh LAW.md"
+[[ "$(find "$d/trace" -name '*-init*.md' | wc -l)" -ge 2 ]] \
+  && ok "a same-day reinstall takes the next free entry name" \
+  || no "reinstall should add a new entry rather than replace one"
+rm -rf "$d"
+
+echo
+echo "== the installed workflow runs the installed runtime =="
+d="$(new_project)"
+bash "$ROOT/scripts/install.sh" "$d" --with-ci >/dev/null 2>&1
+wf="$d/.github/workflows/governance-gate.yml"
+[[ -f "$wf" ]] && ok "installs a workflow" || no "no workflow installed"
+grep -q 'vscode-extension' "$wf" && no "installed workflow needs a directory the installer never creates" || ok "installed workflow does not reference vscode-extension"
+grep -q 'npm ci' "$wf" && no "installed workflow builds an extension that is not there" || ok "installed workflow does not run npm"
+grep -q 'gate_report.sh' "$wf" && ok "installed workflow runs the installed runtime" || no "workflow does not call the runtime"
+grep -q 'fetch-depth: 0' "$wf" && ok "installed workflow keeps full history for the merge-base" || no "shallow clone would void the scope check"
+rm -rf "$d"
+
+echo
+echo "== a broken test target is not mistaken for an absent one =="
+d="$(new_project)"
+bash "$ROOT/scripts/install.sh" "$d" >/dev/null 2>&1
+sed -i 's/`<set workspace root>`/`proj`/; s/`<set concrete goal>`/`g`/; s/`<set explicit exclusions>`/`n`/' "$d/PATH.md"
+sed -i 's|allowed_paths: <set the files this step may touch>|allowed_paths: src/**|' "$d/PATH.md"
+git -C "$d" add -A >/dev/null; git -C "$d" commit -qm governance
+
+printf 'include governance.mk\n\n.PHONY: test\ntest: missing-fixture\n\t@echo run\n' > "$d/Makefile"
+rep="$(GOVERNANCE_DIFF_BASE=HEAD bash "$d/scripts/gate_report.sh" 2>&1)"
+grep -q '| Tests | ❌ FAIL |' <<<"$rep" && ok "a broken test target is reported FAIL" || no "broken target wrongly reported: $(grep -m1 'Tests' <<<"$rep")"
+grep -q '🔴' <<<"$rep" && ok "a broken test target makes the verdict red" || no "verdict should be red"
+
+printf 'include governance.mk\n\n.PHONY: test\ntest:\n\t@echo "  ok   stub"\n' > "$d/Makefile"
+rep="$(GOVERNANCE_DIFF_BASE=HEAD bash "$d/scripts/gate_report.sh" 2>&1)"
+grep -q '| Tests | ✅ PASS |' <<<"$rep" && ok "a working test target is run and reported" || no "working target not run"
+rm -rf "$d"
+
+echo
 echo "== it refuses to install into itself =="
 if bash "$ROOT/scripts/install.sh" "$ROOT" >/dev/null 2>&1; then
   no "installing into the governance repository should be refused"

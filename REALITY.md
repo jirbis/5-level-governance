@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-15`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P54`
-- HEAD at generation: `00a4cc3`
+- Active PATH step: `P60`
+- HEAD at generation: `f6599e1`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -50,6 +50,7 @@
 - `trace/2026-09-15-decisions-log.md`
 - `trace/2026-09-15-generated-reality.md`
 - `trace/2026-09-15-install-path.md`
+- `trace/2026-09-15-owner-review-pr6.md`
 - `trace/2026-09-15-reality-working-tree.md`
 - `trace/2026-09-15-review-findings-pr6.md`
 - `trace/2026-09-15-scope-enforcement.md`
@@ -78,6 +79,15 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- Four owner-review findings fixed. Two were vacuous passes of the same shape as
+  the diff-base bug: a broken test target reported as not configured, and a
+  settings default masking the environment limit.
+- Record writes are now unconditionally non-destructive; `--force` refreshes
+  doctrine and cannot touch evidence.
+- `--with-ci` installs a workflow built for an installed project rather than
+  this repository own, which required an extension directory the installer
+  never creates.
+
 - `scripts/install.sh` puts governance into another repository without
   overwriting anything. Initialization previously wrote the doctrine but not the
   gate runtime, so a new workspace had no `make gate` and no CI.

@@ -275,18 +275,28 @@ for (const [text, want] of [
   // resolve the same way, or a limit honoured by the generator is ignored by the
   // checker.
   process.env.REALITY_FILE_LIMIT = "5";
-  const resolved = realityFileLimit(undefined);
-  delete process.env.REALITY_FILE_LIMIT;
-  if (resolved === 5) {
-    console.log("  ok   REALITY_FILE_LIMIT from the environment is honoured");
-  } else {
-    console.log(`  FAIL REALITY_FILE_LIMIT ignored: resolved ${resolved}, want 5`);
-    fails++;
+  const cases = [
+    // A settings default looks identical to a real choice, so callers must pass
+    // undefined when the user never set one - otherwise 200 masks the
+    // environment and the two gates disagree again.
+    [undefined, 5, "an unset setting lets the environment value through"],
+    [7, 7, "an explicitly configured value wins over the environment"],
+    [0, 5, "a nonsense configured value falls back to the environment"],
+  ];
+  for (const [configured, want, label] of cases) {
+    const got = realityFileLimit(configured);
+    if (got === want) {
+      console.log(`  ok   limit: ${label}`);
+    } else {
+      console.log(`  FAIL limit: ${label} — got ${got}, want ${want}`);
+      fails++;
+    }
   }
+  delete process.env.REALITY_FILE_LIMIT;
   if (realityFileLimit(undefined) === 200) {
-    console.log("  ok   the default limit is 200 when nothing is configured");
+    console.log("  ok   limit: the default is 200 when nothing is set anywhere");
   } else {
-    console.log("  FAIL default limit is not 200");
+    console.log("  FAIL limit: default is not 200");
     fails++;
   }
   rmSync(dir, { recursive: true, force: true });
