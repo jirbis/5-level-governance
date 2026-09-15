@@ -70,21 +70,22 @@ rm -rf "$d"
 echo
 echo "== idempotence =="
 d="$(new_repo)"
-reality_render "$d" > "$d/REALITY.md.1"
-cp "$d/REALITY.md.1" "$d/REALITY.md"
-reality_render "$d" > "$d/REALITY.md.2"
-if diff -q <(grep -v 'Working tree at generation' "$d/REALITY.md.1") \
-            <(grep -v 'Working tree at generation' "$d/REALITY.md.2") >/dev/null; then
+r1="$(mktemp)"; r2="$(mktemp)"
+reality_render "$d" > "$r1"
+cat "$r1" > "$d/REALITY.md"
+reality_render "$d" > "$r2"
+if diff -q <(grep -v 'Working tree at generation' "$r1") \
+            <(grep -v 'Working tree at generation' "$r2") >/dev/null; then
   ok "rendering twice produces the same file"
 else
   no "rendering is not idempotent"
 fi
-rm -rf "$d"
+rm -f "$r1" "$r2"; rm -rf "$d"
 
 echo
 echo "== staleness =="
 d="$(new_repo)"
-reality_render "$d" > "$d/R.tmp" && mv "$d/R.tmp" "$d/REALITY.md"
+t="$(mktemp)"; reality_render "$d" > "$t"; cat "$t" > "$d/REALITY.md"; rm -f "$t"
 if reality_is_current "$d" >/dev/null; then ok "a freshly generated REALITY is current"; else no "should be current"; fi
 
 printf 'gamma\n' > "$d/gamma.txt"

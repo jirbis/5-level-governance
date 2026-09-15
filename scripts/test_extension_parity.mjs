@@ -151,7 +151,9 @@ for (const [label, reality, tracked, wantStale] of realityCases) {
     execFileSync("mkdir", ["-p", path.dirname(full)]);
     writeFileSync(full, "x");
   }
-  // stage exactly the tracked set so `git ls-files` matches the case
+  // stage exactly the intended set; REALITY.md itself stays untracked and is
+  // excluded from the case's expected list, so add it to .gitignore
+  writeFileSync(path.join(dir, ".gitignore"), "REALITY.md\n.gitignore\n");
   execFileSync("git", ["-C", dir, "add", "--", ...tracked]);
   const shOut = execFileSync("bash", [
     "-c",

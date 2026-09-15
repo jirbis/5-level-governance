@@ -50,7 +50,14 @@ reality_snapshot_block() {
 reality_artifacts_block() {
   local root="$1" files count
 
-  files="$(git -C "$root" ls-files 2>/dev/null || true)"
+  # Tracked files plus untracked-but-not-ignored ones. Listing only the index
+  # would make REALITY perpetually one step behind: generate, stage, stale again.
+  files="$(
+    {
+      git -C "$root" ls-files 2>/dev/null || true
+      git -C "$root" ls-files --others --exclude-standard 2>/dev/null || true
+    } | sed '/^$/d' | LC_ALL=C sort -u
+  )"
   count="$(grep -c . <<<"$files" || true)"
 
   printf '%s\n' "$ARTIFACTS_OPEN"

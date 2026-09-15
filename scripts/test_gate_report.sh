@@ -55,13 +55,20 @@ P
   git -C "$d" commit -qm base
   # generate REALITY the way a real workspace would, so the staleness check has
   # something current to compare against
-  ( source "$ROOT/scripts/reality_gen.sh"; reality_render "$d" ) > "$d/R.tmp"
-  mv "$d/R.tmp" "$d/REALITY.md"
+  local tmp; tmp="$(mktemp)"
+  ( source "$ROOT/scripts/reality_gen.sh"; reality_render "$d" ) > "$tmp"
+  cat "$tmp" > "$d/REALITY.md"; rm -f "$tmp"
   printf '%s' "$d"
 }
 
 run_report() {
   local d="$1"; shift
+  # The loop regenerates REALITY before running the gates, and so does the
+  # fixture: files created by a test are part of the tree the gate will see.
+  local tmp; tmp="$(mktemp)"   # outside the repo: a temp file inside it would
+                               # be listed as an artifact and then vanish
+  ( source "$ROOT/scripts/reality_gen.sh"; reality_render "$d" ) > "$tmp"
+  cat "$tmp" > "$d/REALITY.md"; rm -f "$tmp"
   GOVERNANCE_DIFF_BASE=HEAD bash "$d/scripts/gate_report.sh" "$@" 2>&1
 }
 

@@ -5,7 +5,7 @@
 - Generated: `2026-09-15`
 - Workspace root: `5-level-governance`
 - Active PATH step: `P38`
-- HEAD at generation: `2cbe547`
+- HEAD at generation: `07b7878`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -19,17 +19,37 @@
 - `PATH.md`
 - `README.md`
 - `REALITY.md`
+- `decisions/2026-09-15-declared-scope-is-a-precondition-of-admissibility.md`
+- `decisions/2026-09-15-records-become-directories.md`
+- `decisions/2026-09-15-the-record-of-rule-changes-becomes-an-enforced-artifact.md`
+- `decisions/README.md`
 - `scripts/decision_log.sh`
 - `scripts/gate_enforce.sh`
 - `scripts/gate_report.sh`
 - `scripts/path_scope.sh`
 - `scripts/reality_gen.sh`
 - `scripts/reality_update.sh`
+- `scripts/shard_migrate.sh`
+- `scripts/shard_store.sh`
 - `scripts/test_decision_log.sh`
 - `scripts/test_extension_parity.mjs`
 - `scripts/test_gate_report.sh`
 - `scripts/test_path_scope.sh`
 - `scripts/test_reality_gen.sh`
+- `scripts/test_shard_store.sh`
+- `trace/2026-02-18-add-gate-commands.md`
+- `trace/2026-02-18-fix-gate-script.md`
+- `trace/2026-02-18-init.md`
+- `trace/2026-09-15-ci-gate.md`
+- `trace/2026-09-15-codify-2.md`
+- `trace/2026-09-15-codify.md`
+- `trace/2026-09-15-decisions-log.md`
+- `trace/2026-09-15-generated-reality.md`
+- `trace/2026-09-15-reality-working-tree.md`
+- `trace/2026-09-15-scope-enforcement.md`
+- `trace/2026-09-15-shard-records.md`
+- `trace/2026-09-15-trace-append-only.md`
+- `trace/README.md`
 - `vscode-extension/.gitignore`
 - `vscode-extension/.vscodeignore`
 - `vscode-extension/esbuild.mjs`
@@ -42,6 +62,7 @@
 - `vscode-extension/src/parsers.ts`
 - `vscode-extension/src/realityRules.ts`
 - `vscode-extension/src/scanner.ts`
+- `vscode-extension/src/shardRules.ts`
 - `vscode-extension/src/templates.ts`
 - `vscode-extension/src/traceAppend.ts`
 - `vscode-extension/src/traceRules.ts`

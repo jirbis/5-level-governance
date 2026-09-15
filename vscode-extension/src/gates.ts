@@ -613,10 +613,20 @@ export function runGate2(): GateResult {
   // never recorded, which is the drift this repository actually suffered.
   const realityContent = readFile(root, "REALITY.md");
   if (realityContent) {
-    const tracked = (git(root, ["ls-files"]) ?? "")
-      .split("\n")
-      .map((f) => f.trim())
-      .filter((f) => f.length > 0);
+    // Tracked plus untracked-but-not-ignored: listing only the index would make
+    // REALITY perpetually one step behind - generate, stage, stale again.
+    const tracked = [
+      ...new Set(
+        [
+          git(root, ["ls-files"]) ?? "",
+          git(root, ["ls-files", "--others", "--exclude-standard"]) ?? "",
+        ]
+          .join("\n")
+          .split("\n")
+          .map((f) => f.trim())
+          .filter((f) => f.length > 0)
+      ),
+    ].sort();
     const staleness = realityStaleness(realityContent, tracked);
     if (staleness.stale) {
       const loc = findLineNumber(realityContent, /generated:artifacts/);
