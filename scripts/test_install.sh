@@ -133,6 +133,19 @@ rep="$(GOVERNANCE_DIFF_BASE=HEAD bash "$d/scripts/gate_report.sh" 2>&1)"
 grep -q '| Tests | ❌ FAIL |' <<<"$rep" && ok "a broken test target is reported FAIL" || no "broken target wrongly reported: $(grep -m1 'Tests' <<<"$rep")"
 grep -q '🔴' <<<"$rep" && ok "a broken test target makes the verdict red" || no "verdict should be red"
 
+# A required include that is missing names a target other than `test`, so a
+# check that infers absence from the shape of the error calls this "absent" and
+# reports green while the project's tests cannot run at all.
+printf 'include missing-test-config.mk\n\n.PHONY: test\ntest:\n\t@echo run\n' > "$d/Makefile"
+rep="$(GOVERNANCE_DIFF_BASE=HEAD bash "$d/scripts/gate_report.sh" 2>&1)"
+grep -q '| Tests | ❌ FAIL |' <<<"$rep" && ok "a missing required include is reported FAIL" || no "missing include wrongly reported: $(grep -m1 'Tests' <<<"$rep")"
+grep -q '🔴' <<<"$rep" && ok "a missing required include makes the verdict red" || no "verdict should be red"
+
+# Absence must be positively established: make has to name `test` itself.
+printf 'include governance.mk\n' > "$d/Makefile"
+rep="$(GOVERNANCE_DIFF_BASE=HEAD bash "$d/scripts/gate_report.sh" 2>&1)"
+grep -q '| Tests | — not configured |' <<<"$rep" && ok "a genuinely absent test target is still not configured" || no "absent target misreported: $(grep -m1 'Tests' <<<"$rep")"
+
 printf 'include governance.mk\n\n.PHONY: test\ntest:\n\t@echo "  ok   stub"\n' > "$d/Makefile"
 rep="$(GOVERNANCE_DIFF_BASE=HEAD bash "$d/scripts/gate_report.sh" 2>&1)"
 grep -q '| Tests | ✅ PASS |' <<<"$rep" && ok "a working test target is run and reported" || no "working target not run"

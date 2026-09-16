@@ -2,10 +2,10 @@
 
 <!-- generated:snapshot -->
 ## Current State Snapshot
-- Generated: `2026-09-15`
+- Generated: `2026-09-16`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P62`
-- HEAD at generation: `f4fd352`
+- Active PATH step: `P64`
+- HEAD at generation: `774d124`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -58,6 +58,7 @@
 - `trace/2026-09-15-scope-enforcement.md`
 - `trace/2026-09-15-shard-records.md`
 - `trace/2026-09-15-trace-append-only.md`
+- `trace/2026-09-16-absent-target-must-be-named.md`
 - `trace/README.md`
 - `vscode-extension/.gitignore`
 - `vscode-extension/.vscodeignore`
@@ -81,6 +82,11 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- Third defect of one shape in `test_target_state`: a missing required include
+  named a target other than `test`, so a project whose tests could not run at
+  all reported green. Absence is now positively established — make must name
+  `test` itself — rather than inferred from the shape of an error.
+
 - Codified the standing rule that a check which cannot verify must report FAIL,
   and that every check needs a test for that third state. Three occurrences in
   one branch made it evidence rather than a hunch.

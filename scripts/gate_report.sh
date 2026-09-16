@@ -26,8 +26,17 @@ have_tests=0
 # run, and calling that "not configured" would hide a broken test setup behind a
 # green verdict - the same vacuous pass the diff-base bug produced.
 #
-# The two are distinguishable: make names the missing target, and adds
-# "needed by" when the missing thing is a prerequisite of an existing target.
+# Only a POSITIVELY ESTABLISHED absence counts as `absent`: make must say that
+# the thing it cannot build is `test` itself. Anything else - a missing
+# prerequisite, a missing required include, a parse error, a failure to evaluate
+# the makefile at all - is `broken` and fails the report.
+#
+# Two earlier versions of this function got that backwards by asking whether the
+# failure "looked like" an absent target. A missing prerequisite slipped through
+# the first, a missing `include` through the second: both name a missing target
+# that is not `test`, and both left a project with a broken test setup reading
+# green. Inferring absence from the shape of an error is the mistake; the
+# requested target has to be named.
 test_target_state() {
   local out rc
   out="$(make -C "$ROOT" -n test 2>&1)"
@@ -36,7 +45,10 @@ test_target_state() {
     printf 'present'
     return
   fi
-  if grep -q "No rule to make target" <<<"$out" && ! grep -q "needed by" <<<"$out"; then
+  # GNU make quotes the target as 'test' or `test' depending on version.
+  # "needed by" means the unbuildable thing is a prerequisite, not the request.
+  if grep -Eq "No rule to make target [\`']test['\`]" <<<"$out" \
+     && ! grep -q "needed by" <<<"$out"; then
     printf 'absent'
     return
   fi

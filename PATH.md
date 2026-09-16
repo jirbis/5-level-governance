@@ -151,9 +151,13 @@ Each step may declare the file scope it is permitted to touch:
       allowed_paths: decisions/**, PATH.md
 - [x] `P62` Update REALITY, record the codification, run Gate 2.
       allowed_paths: PATH.md, trace/**, REALITY.md
+- [x] `P63` Count only a positively established absence of the `test` target as not configured; every other make failure is broken.
+      allowed_paths: scripts/**, PATH.md
+- [x] `P64` Update REALITY, record the fix, run Gate 2.
+      allowed_paths: PATH.md, trace/**, REALITY.md
 
 ## Current Pointer
-- `active_step`: `P62`
+- `active_step`: `P64`
 
 ## Blocking Questions
 - (none)
