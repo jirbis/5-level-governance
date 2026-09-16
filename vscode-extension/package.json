@@ -60,6 +60,21 @@
         "category": "Governance"
       }
     ],
+    "configuration": {
+      "title": "Governance",
+      "properties": {
+        "governance.diffBase": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Commit-ish that Gate 2 diffs against when checking PATH `allowed_paths`. Leave empty to use the merge-base with the default branch, falling back to `HEAD`."
+        },
+        "governance.realityFileLimit": {
+          "type": "number",
+          "default": 200,
+          "markdownDescription": "Above this many files, REALITY lists directories with counts instead of every path. Must match `REALITY_FILE_LIMIT` used by `make reality`, or a generated REALITY passes one gate and fails the other."
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {

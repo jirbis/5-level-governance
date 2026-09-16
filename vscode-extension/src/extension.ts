@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { GOVERNANCE_FILES, getTemplate, GovernanceFile } from "./templates";
+import { GOVERNANCE_FILES, GOVERNANCE_DIRS, getSeedFiles, getTemplate, GovernanceFile } from "./templates";
+import { regenerateReality } from "./realityIo";
 import { runGate1, runGate2, GateResult } from "./gates";
 import { initDiagnostics, updateDiagnostics, clearDiagnostics } from "./diagnostics";
 import { GovernanceTreeProvider, createStatusBarItem, updateStatusBarItem } from "./treeView";
@@ -80,11 +81,27 @@ async function handleInit(): Promise<void> {
     fs.writeFileSync(path.join(root, file), content, "utf-8");
   }
 
+  // The append-only records are directories of one file per entry
+  for (const dir of GOVERNANCE_DIRS) {
+    fs.mkdirSync(path.join(root, dir), { recursive: true });
+  }
+  for (const seed of getSeedFiles(vars)) {
+    const full = path.join(root, seed.path);
+    if (!fs.existsSync(full)) {
+      fs.writeFileSync(full, seed.content, "utf-8");
+    }
+  }
+
+  // Regenerate REALITY from the same git listing Gate 2 reads. The template can
+  // only guess at the workspace contents, and a guess that misses a nested file
+  // leaves the freshly initialized workspace failing its own first gate.
+  regenerateReality(root);
+
   treeProvider.refresh();
   updateStatusBarItem(statusBarItem);
 
   vscode.window.showInformationMessage(
-    `Governance initialized with ${GOVERNANCE_FILES.length} files.`
+    `Governance initialized: ${GOVERNANCE_FILES.length} files and ${GOVERNANCE_DIRS.length} records.`
   );
 
   // Open CLAUDE.md

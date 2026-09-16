@@ -125,7 +125,7 @@ export class GovernanceTreeProvider
     // Parse governance state
     const pathContent = this.readFile(root, "PATH.md");
     const realityContent = this.readFile(root, "REALITY.md");
-    const traceContent = this.readFile(root, "TRACE.md");
+    const traceContent = this.readTraceShards(root);
 
     // Active step
     if (pathContent) {
@@ -176,6 +176,24 @@ export class GovernanceTreeProvider
     }
 
     return elements;
+  }
+
+  /** Concatenate the trace entries in order; one file per entry. */
+  private readTraceShards(root: string): string | null {
+    const dir = path.join(root, "trace");
+    if (!fs.existsSync(dir)) {
+      return null;
+    }
+    const entries = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".md") && f !== "README.md")
+      .sort();
+    if (entries.length === 0) {
+      return null;
+    }
+    return entries
+      .map((f) => fs.readFileSync(path.join(dir, f), "utf-8"))
+      .join("\n");
   }
 
   private readFile(root: string, filename: string): string | null {

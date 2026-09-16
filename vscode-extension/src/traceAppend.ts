@@ -1,8 +1,24 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { parsePathMd, parseRealityMd, parseTraceMd, todayISO } from "./parsers";
+import { todayISO } from "./parsers";
+import { regenerateReality, snapshotFacts, workspaceFiles } from "./realityIo";
+import { explicitFileLimit } from "./gates";
 import { GOVERNANCE_FILES } from "./templates";
+import { shardFileName } from "./shardRules";
+
+/** The newest entry by filename, which sorts chronologically. */
+function latestTraceEntry(root: string): string {
+  const dir = path.join(root, "trace");
+  if (!fs.existsSync(dir)) {
+    return path.join(dir, "missing.md");
+  }
+  const entries = fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".md") && f !== "README.md")
+    .sort();
+  return path.join(dir, entries[entries.length - 1] ?? "missing.md");
+}
 
 function workspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -15,9 +31,9 @@ export async function appendTraceEntry(): Promise<void> {
     return;
   }
 
-  const tracePath = path.join(root, "TRACE.md");
-  if (!fs.existsSync(tracePath)) {
-    vscode.window.showErrorMessage("TRACE.md not found. Run 'Initialize Governance' first.");
+  const traceDir = path.join(root, "trace");
+  if (!fs.existsSync(traceDir)) {
+    vscode.window.showErrorMessage("trace/ not found. Run 'Initialize Governance' first.");
     return;
   }
 
@@ -68,13 +84,25 @@ export async function appendTraceEntry(): Promise<void> {
   }
 
   const date = todayISO();
-  const entry = `- ${date} — ${label}: ${description}; gate_1=${gate1} (${gate1Reason}), gate_2=${gate2} (${gate2Reason}).`;
+  const entry = `# ${date} — ${label}
 
-  const content = fs.readFileSync(tracePath, "utf-8");
-  const newContent = content.trimEnd() + "\n" + entry + "\n";
-  fs.writeFileSync(tracePath, newContent, "utf-8");
+${description}
 
-  vscode.window.showInformationMessage(`TRACE entry appended: ${label}`);
+- \`gate_1\`: ${gate1} — ${gate1Reason}
+- \`gate_2\`: ${gate2} — ${gate2Reason}
+`;
+
+  // A new file per entry, never an edit to an existing one: that is what makes
+  // the record append-only and what keeps parallel agents from colliding.
+  let name = shardFileName(date, label);
+  let n = 2;
+  while (fs.existsSync(path.join(traceDir, name))) {
+    name = shardFileName(date, label).replace(/\.md$/, `-${n}.md`);
+    n += 1;
+  }
+  fs.writeFileSync(path.join(traceDir, name), entry, "utf-8");
+
+  vscode.window.showInformationMessage(`TRACE entry written: trace/${name}`);
 }
 
 export async function updateReality(): Promise<void> {
@@ -84,96 +112,27 @@ export async function updateReality(): Promise<void> {
     return;
   }
 
-  const realityPath = path.join(root, "REALITY.md");
-  if (!fs.existsSync(realityPath)) {
+  if (!fs.existsSync(path.join(root, "REALITY.md"))) {
     vscode.window.showErrorMessage("REALITY.md not found. Run 'Initialize Governance' first.");
     return;
   }
 
-  const date = todayISO();
-  const workspaceName = path.basename(root);
+  // Only an explicitly set value; the declared default would mask the
+  // environment variable the shell generator reads.
+  const limit = explicitFileLimit();
 
-  // Get active step from PATH.md
-  let activeStep = "P1";
-  const pathFile = path.join(root, "PATH.md");
-  if (fs.existsSync(pathFile)) {
-    const pathContent = fs.readFileSync(pathFile, "utf-8");
-    const parsed = parsePathMd(pathContent);
-    activeStep = parsed.activeStep || "P1";
+  // Refuse rather than overwrite. The hand-written sections are the reason only
+  // part of this file is generated, and a template would discard them.
+  if (!regenerateReality(root, limit)) {
+    vscode.window.showErrorMessage(
+      "REALITY.md has no generated regions. Add the generated:snapshot and " +
+        "generated:artifacts markers, or run `make reality`, before using this command."
+    );
+    return;
   }
 
-  // Get last gate status from TRACE.md
-  let gateStatus = "UNKNOWN";
-  const traceFile = path.join(root, "TRACE.md");
-  if (fs.existsSync(traceFile)) {
-    const traceContent = fs.readFileSync(traceFile, "utf-8");
-    const parsed = parseTraceMd(traceContent);
-    if (parsed.entries.length > 0) {
-      const last = parsed.entries[parsed.entries.length - 1];
-      if (last.gate1 && last.gate2) {
-        gateStatus =
-          last.gate1 === "PASS" && last.gate2 === "PASS" ? "PASS" : "FAIL";
-      }
-    }
-  }
-
-  // Discover existing governance artifacts
-  const artifacts: string[] = [];
-  for (const file of GOVERNANCE_FILES) {
-    if (fs.existsSync(path.join(root, file))) {
-      artifacts.push(file);
-    }
-  }
-
-  // Check for additional common files
-  for (const extra of ["README.md", "Makefile", "scripts/gate_enforce.sh"]) {
-    if (fs.existsSync(path.join(root, extra))) {
-      artifacts.push(extra);
-    }
-  }
-
-  // Build open risks
-  const risks: string[] = [];
-  if (fs.existsSync(pathFile)) {
-    const pathContent = fs.readFileSync(pathFile, "utf-8");
-    const parsed = parsePathMd(pathContent);
-    if (parsed.placeholders.length > 0) {
-      risks.push("PATH values still contain placeholders and must be set before operational use.");
-    }
-    if (parsed.hasBlockingQuestions) {
-      risks.push("PATH has unresolved blocking questions.");
-    }
-  }
-  if (gateStatus === "UNKNOWN") {
-    risks.push("Gate status has not been resolved yet.");
-  }
-
-  const artifactLines = artifacts.map((a) => `- \`${a}\``).join("\n");
-  const riskLines =
-    risks.length > 0
-      ? risks.map((r) => `- ${r}`).join("\n")
-      : "- (none)";
-
-  const newContent = `# REALITY
-
-## Current State Snapshot
-- Date: \`${date}\`
-- Workspace root: \`${workspaceName}\`
-- Active PATH step: \`${activeStep}\`
-- Last gate status: \`${gateStatus}\`
-
-## Existing Artifacts
-${artifactLines}
-
-## Open Risks
-${riskLines}
-
-## Notes
-- This file represents current truth and must be updated after each admissible execution step.
-`;
-
-  fs.writeFileSync(realityPath, newContent, "utf-8");
+  const facts = snapshotFacts(root);
   vscode.window.showInformationMessage(
-    `REALITY.md updated: step=${activeStep}, gate=${gateStatus}`
+    `REALITY.md regenerated: step=${facts.activeStep}, ${workspaceFiles(root).length} artifact(s)`
   );
 }
