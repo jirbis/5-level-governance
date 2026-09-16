@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
-# Verify that a recorded approval was actually given.
+# Check that the approval a decision entry records was actually given.
 #
-# The decision log proves an approval is RECORDED. Nothing inside a file proves
-# who wrote it, so `approved_by` alone is tamper-evidence, not authentication.
-# This binds it to identity the repository holds and the author cannot forge:
-# the set of GitHub accounts that submitted an APPROVED review on the pull
-# request carrying the change.
+#   bash scripts/verify_approval.sh [base]
 #
-#   bash scripts/verify_approval.sh [base] [target]
+# Every decisions/ entry the change ADDS must name a GitHub account that
+# submitted an approving review on the head being verified. Entries already in
+# the record are immutable and are never re-examined.
 #
-# Reads GOVERNANCE_APPROVERS_FILE: one GitHub login per line, written by CI
-# after it has successfully queried the reviews.
+# Reads:
+#   GOVERNANCE_APPROVERS_FILE  one GitHub login per line, written by CI after it
+#                              has successfully queried the reviews
 #
-# Fails closed, per decisions/ D4. The file MISSING means the approver list
-# could not be established, which is not the same as "nobody approved" and is
-# never a pass: a verifier that cannot verify must not report success.
+# WHAT THIS IS. It surfaces a mismatch between the name written in the record
+# and the accounts that approved. It is not a barrier against a hostile author:
+# in a `pull_request` workflow both this script and the workflow that runs it
+# come from the branch under review, so whoever writes the entry can also
+# rewrite the checker. Making approval MANDATORY is GitHub's job - branch
+# protection or a ruleset with required reviews and stale-approval dismissal.
+# See GATE.md.
+#
+# Fails closed, per decisions/ D4: an approver list that was never written means
+# the query failed, which is not "nobody approved" and is never a pass.
 set -uo pipefail
 
 ROOT="${GOVERNANCE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -23,7 +29,6 @@ source "$ROOT/scripts/path_scope.sh"
 # shellcheck source=scripts/shard_store.sh
 source "$ROOT/scripts/shard_store.sh"
 
-TARGET="${2:-LAW.md}"
 DIR="decisions"
 
 fail() { printf '%s\n' "$1"; exit 1; }
@@ -33,20 +38,23 @@ if [[ -z "$BASE" ]]; then
   BASE="$(scope_diff_base "$ROOT" 2>&1)" || fail "approval: $BASE"
 fi
 
-changed="$(scope_changed_files "$ROOT" "$BASE")" \
-  || fail "approval: cannot read the diff against ${BASE:0:12}; approvals cannot be verified"
+declare -a added=()
+while IFS= read -r entry; do
+  [[ -n "$entry" && -f "$ROOT/$entry" ]] && added+=("$entry")
+done < <(shard_added "$ROOT" "$BASE" "$DIR")
 
-if ! grep -qx "$TARGET" <<<"$changed"; then
-  echo "approval: $TARGET unchanged, nothing to verify"
+# A change that records no decision has no approval to verify. Requiring one
+# where LAW.md changed is a separate rule, enforced by the gate itself.
+if (( ${#added[@]} == 0 )); then
+  echo "approval: no new $DIR/ entries, nothing to verify"
   exit 0
 fi
 
-# The approver list must have been established, not merely absent.
 if [[ -z "${GOVERNANCE_APPROVERS_FILE:-}" ]]; then
-  fail "approval: GOVERNANCE_APPROVERS_FILE is unset, so the approvers are unknown; $TARGET changed and cannot be verified"
+  fail "approval: GOVERNANCE_APPROVERS_FILE is unset, so the approvers are unknown; ${#added[@]} new $DIR/ entr(ies) cannot be verified"
 fi
 if [[ ! -f "$GOVERNANCE_APPROVERS_FILE" ]]; then
-  fail "approval: the approver list was never written, so querying the reviews failed; $TARGET changed and cannot be verified"
+  fail "approval: the approver list was never written, so querying the reviews failed; ${#added[@]} new $DIR/ entr(ies) cannot be verified"
 fi
 
 declare -a approvers=()
@@ -56,23 +64,20 @@ while IFS= read -r line; do
 done < "$GOVERNANCE_APPROVERS_FILE"
 
 if (( ${#approvers[@]} == 0 )); then
-  fail "approval: $TARGET changed but nobody has submitted an approving review"
+  fail "approval: ${#added[@]} new $DIR/ entr(ies) recorded but no approving review covers this head"
 fi
 
-# Only entries this change adds are examined. Entries already in the record were
-# approved under whatever rule applied then, and they are immutable: rewriting
-# them to satisfy a newer rule is precisely what the append-only record forbids.
 declare -a unverified=()
-checked=0
-while IFS= read -r entry; do
-  [[ -z "$entry" || ! -f "$ROOT/$entry" ]] && continue
-  grep -q "$TARGET" "$ROOT/$entry" || continue
-
+for entry in "${added[@]}"; do
   value="$(sed -n 's/^- `approved_by`:[[:space:]]*//p' "$ROOT/$entry" | head -n1)"
   value="${value//\`/}"
   value="${value//[$'\r\t ']/}"
   value="${value#@}"
-  checked=$(( checked + 1 ))
+
+  if [[ -z "$value" ]]; then
+    unverified+=("$entry records no approved_by")
+    continue
+  fi
 
   matched=0
   for a in "${approvers[@]}"; do
@@ -81,20 +86,14 @@ while IFS= read -r entry; do
       break
     fi
   done
-  if (( matched == 0 )); then
-    unverified+=("$entry names '${value:-<empty>}'")
-  fi
-done < <(shard_added "$ROOT" "$BASE" "$DIR")
-
-if (( checked == 0 )); then
-  fail "approval: $TARGET changed but this change adds no $DIR/ entry naming it"
-fi
+  (( matched == 1 )) || unverified+=("$entry names '$value'")
+done
 
 if (( ${#unverified[@]} > 0 )); then
-  printf 'approval: recorded approver did not approve this pull request — %s; approving reviews came from: %s\n' \
+  printf 'approval: recorded approver did not approve this head — %s; approving reviews of this head came from: %s\n' \
     "${unverified[0]}" "$(IFS=,; echo "${approvers[*]}")"
   exit 1
 fi
 
-printf 'approval: %s entr(ies) verified against the approving reviewer(s): %s\n' \
-  "$checked" "$(IFS=,; echo "${approvers[*]}")"
+printf 'approval: %s new %s entr(ies) verified against the approving reviewer(s) of this head: %s\n' \
+  "${#added[@]}" "$DIR" "$(IFS=,; echo "${approvers[*]}")"

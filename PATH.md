@@ -41,9 +41,21 @@ against these patterns, so an undeclared scope admits no change.
       allowed_paths: PATH.md, trace/**, REALITY.md
 - [x] `A7` Ship the approval verifier with the installed runtime, and assert the installed runtime is complete.
       allowed_paths: scripts/**, PATH.md, trace/**, REALITY.md
+- [x] `A8` Declare the route for the four review findings on pull request #7.
+      allowed_paths: PATH.md
+- [x] `A9` Verify every newly added decisions entry, not only when LAW.md changed.
+      allowed_paths: scripts/**, PATH.md
+- [x] `A10` Bind an approval to the head it approved, so an older commit's approval cannot authorise later changes.
+      allowed_paths: .github/workflows/**, scripts/**, PATH.md
+- [x] `A11` Run the verification in a job that executes no code from the pull request, and recompute it when a review is submitted, edited or dismissed.
+      allowed_paths: .github/workflows/**, scripts/**, PATH.md
+- [x] `A12` State the trust boundary honestly: the check surfaces mismatches, GitHub settings make approval mandatory.
+      allowed_paths: decisions/**, GATE.md, README.md, PATH.md
+- [x] `A13` Update REALITY, add a trace entry, run Gate 2.
+      allowed_paths: PATH.md, trace/**, REALITY.md
 
 ## Current Pointer
-- `active_step`: `A7`
+- `active_step`: `A13`
 
 ## Blocking Questions
 - (none)

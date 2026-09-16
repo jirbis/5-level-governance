@@ -75,8 +75,22 @@ check() {  # check <label> <repo> <pass|fail> <needle> [approvers_file]
 
 echo "== nothing to verify =="
 d="$(new_repo)"
-check "an unchanged LAW.md needs no approval" "$d" pass "nothing to verify"
+check "a change that adds no entry needs no approval" "$d" pass "nothing to verify"
 rm -rf "$d"
+
+# The gap this replaced: verification used to be conditional on a LAW.md diff,
+# so an entry added alongside any other change was never checked at all.
+d="$(new_repo)"
+add_entry "$d" 2026-02-02-new.md "decisions/README.md" jirbis
+f="$(approvers_file "$d" jirbis)"
+check "an entry is verified even when LAW.md is untouched" "$d" pass "verified against" "$f"
+rm -f "$f"; rm -rf "$d"
+
+d="$(new_repo)"
+add_entry "$d" 2026-02-02-new.md "decisions/README.md" someone-else
+f="$(approvers_file "$d" jirbis)"
+check "an unapproved entry fails even when LAW.md is untouched" "$d" fail "did not approve this head" "$f"
+rm -f "$f"; rm -rf "$d"
 
 echo
 echo "== fails closed when the approvers cannot be established =="
@@ -100,7 +114,7 @@ rm -f "$f"; rm -rf "$d"
 d="$(new_repo)"
 amend_law "$d"; add_entry "$d" 2026-02-02-new.md LAW.md jirbis
 f="$(approvers_file "$d" someone-else)"
-check "an entry naming a non-approver fails" "$d" fail "did not approve this pull request" "$f"
+check "an entry naming a non-approver fails" "$d" fail "did not approve this head" "$f"
 rm -f "$f"; rm -rf "$d"
 
 d="$(new_repo)"
@@ -112,7 +126,7 @@ rm -f "$f"; rm -rf "$d"
 d="$(new_repo)"
 amend_law "$d"; add_entry "$d" 2026-02-02-new.md LAW.md jirbis
 f="$(approvers_file "$d")"
-check "an empty approver list fails" "$d" fail "nobody has submitted an approving review" "$f"
+check "an approver list with nobody in it fails" "$d" fail "no approving review covers this head" "$f"
 rm -f "$f"; rm -rf "$d"
 
 echo
@@ -125,23 +139,26 @@ amend_law "$d"; add_entry "$d" 2026-02-02-new.md LAW.md jirbis
 f="$(approvers_file "$d" jirbis)"
 out="$(run "$d" "$f")"
 [[ "$out" != *"2026-01-01-older"* ]] && ok "a historical entry is not re-examined" || no "historical entry was checked: $out"
-[[ "$out" == *"1 entr(ies) verified"* ]] && ok "only the newly added entry is counted" || no "wrong count: $out"
+[[ "$out" == *"1 new decisions entr(ies) verified"* ]] && ok "only the newly added entry is counted" || no "wrong count: $out"
 rm -f "$f"; rm -rf "$d"
 
 echo
-echo "== an amendment with no entry at all =="
+echo "== requiring an entry for a LAW change is a separate rule =="
+# verify_approval only checks approvals. "LAW changed, so there must be an
+# entry" belongs to the gate, and keeping them apart is what let an added entry
+# go unverified when LAW happened to be untouched.
 d="$(new_repo)"
 amend_law "$d"
 f="$(approvers_file "$d" jirbis)"
-check "amending LAW with no new entry fails even with an approver" "$d" fail "adds no decisions/ entry" "$f"
+check "amending LAW with no entry is not this check's business" "$d" pass "nothing to verify" "$f"
 rm -f "$f"; rm -rf "$d"
 
 echo
-echo "== an entry about another file does not authorise a LAW change =="
+echo "== an entry with no approver at all =="
 d="$(new_repo)"
-amend_law "$d"; add_entry "$d" 2026-02-02-new.md README.md jirbis
+add_entry "$d" 2026-02-02-new.md LAW.md ""
 f="$(approvers_file "$d" jirbis)"
-check "an entry naming another file does not count" "$d" fail "adds no decisions/ entry" "$f"
+check "an entry recording no approved_by fails" "$d" fail "records no approved_by" "$f"
 rm -f "$f"; rm -rf "$d"
 
 echo

@@ -222,6 +222,10 @@ name: Governance Gate
 
 on:
   pull_request:
+  # An approval submitted, edited or dismissed changes the verdict, and no
+  # other event fires when it happens.
+  pull_request_review:
+    types: [submitted, edited, dismissed]
   workflow_dispatch:
 
 permissions:
@@ -230,6 +234,8 @@ permissions:
 
 jobs:
   gate:
+    # Skipped on review events: nothing in the tree changed, only the approvals.
+    if: github.event_name != 'pull_request_review'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -253,40 +259,10 @@ jobs:
           fi
           echo "base=$base" >> "$GITHUB_OUTPUT"
 
-      - name: Collect approving reviewers
-        id: approvers
-        if: github.event_name == 'pull_request'
-        # No continue-on-error: if the query fails the job fails. A verifier
-        # whose input could not be established must never fall through to a pass.
-        uses: actions/github-script@v7
-        env:
-          APPROVERS_FILE: ${{ runner.temp }}/governance-approvers.txt
-        with:
-          script: |
-            const fs = require('fs');
-            const { owner, repo } = context.repo;
-            const reviews = await github.paginate(
-              github.rest.pulls.listReviews,
-              { owner, repo, pull_number: context.issue.number, per_page: 100 }
-            );
-            const latest = new Map();
-            for (const r of reviews) {
-              if (!r.user || !['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state)) {
-                continue;
-              }
-              latest.set(r.user.login, r.state);
-            }
-            const approvers = [...latest.entries()]
-              .filter(([, state]) => state === 'APPROVED')
-              .map(([login]) => login);
-            fs.writeFileSync(process.env.APPROVERS_FILE, approvers.join('\n') + '\n');
-            core.info(`approving reviewers: ${approvers.join(', ') || '(none)'}`);
-
       - name: Run gates and render report
         id: report
         env:
           GOVERNANCE_DIFF_BASE: ${{ steps.base.outputs.base }}
-          GOVERNANCE_APPROVERS_FILE: ${{ github.event_name == 'pull_request' && format('{0}/governance-approvers.txt', runner.temp) || '' }}
           # Outside the checkout: a report written into the workspace is an
           # untracked file the gates would correctly reject as out of scope.
           REPORT: ${{ runner.temp }}/governance-report.md
@@ -332,6 +308,65 @@ jobs:
             exit 1
           fi
           echo "Governance gate passed."
+
+  # Separate from `gate` on purpose: `gate` runs this project's own `make test`,
+  # which is code from the branch under review and could write the approver list
+  # it is about to be judged by. This job installs nothing and runs no project
+  # target. It still is not a barrier against a hostile author - the workflow and
+  # the verifier both come from the branch under review - so make approval
+  # mandatory with branch protection or a ruleset. See GATE.md.
+  approval:
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the head under review
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Resolve diff base
+        id: base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          echo "base=$(git merge-base "origin/$BASE_REF" HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Collect reviewers who approved THIS head
+        uses: actions/github-script@v7
+        env:
+          APPROVERS_FILE: ${{ runner.temp }}/governance-approvers.txt
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+            const head = process.env.HEAD_SHA;
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              { owner, repo, pull_number: number, per_page: 100 }
+            );
+            // An approval is of a commit, not of a pull request.
+            const latest = new Map();
+            for (const r of reviews) {
+              if (!r.user) continue;
+              if (!['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state)) continue;
+              latest.set(r.user.login, r);
+            }
+            const approvers = [...latest.values()]
+              .filter((r) => r.state === 'APPROVED' && r.commit_id === head)
+              .map((r) => r.user.login);
+            fs.writeFileSync(process.env.APPROVERS_FILE, approvers.join('\n') + '\n');
+            core.info(`approving reviews of ${head}: ${approvers.join(', ') || '(none)'}`);
+
+      - name: Verify recorded approvals
+        env:
+          GOVERNANCE_DIFF_BASE: ${{ steps.base.outputs.base }}
+          GOVERNANCE_APPROVERS_FILE: ${{ runner.temp }}/governance-approvers.txt
+        run: bash ./scripts/verify_approval.sh
 CI
 fi
 
