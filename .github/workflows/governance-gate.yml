@@ -53,10 +53,44 @@ jobs:
           echo "Diffing against $base"
           echo "base=$base" >> "$GITHUB_OUTPUT"
 
+      - name: Collect approving reviewers
+        id: approvers
+        if: github.event_name == 'pull_request'
+        # No continue-on-error: if the query fails the job fails. A verifier
+        # whose input could not be established must never fall through to a
+        # pass, and an unwritten file is exactly how it says so.
+        uses: actions/github-script@v7
+        env:
+          APPROVERS_FILE: ${{ runner.temp }}/governance-approvers.txt
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              { owner, repo, pull_number: context.issue.number, per_page: 100 }
+            );
+            // Latest state per reviewer: an approval that was later dismissed
+            // or changed to REQUEST_CHANGES is not an approval.
+            const latest = new Map();
+            for (const r of reviews) {
+              if (!r.user || !['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state)) {
+                continue;
+              }
+              latest.set(r.user.login, r.state);
+            }
+            const approvers = [...latest.entries()]
+              .filter(([, state]) => state === 'APPROVED')
+              .map(([login]) => login);
+            fs.writeFileSync(process.env.APPROVERS_FILE, approvers.join('\n') + '\n');
+            core.info(`approving reviewers: ${approvers.join(', ') || '(none)'}`);
+
       - name: Run gates and render report
         id: report
         env:
           GOVERNANCE_DIFF_BASE: ${{ steps.base.outputs.base }}
+          # Empty on a push, where there is no pull request to have approvals.
+          GOVERNANCE_APPROVERS_FILE: ${{ github.event_name == 'pull_request' && format('{0}/governance-approvers.txt', runner.temp) || '' }}
           # Outside the checkout. Redirecting into the workspace would create an
           # untracked file before the gates run, and they would correctly report
           # it as out of scope and as REALITY drift - the harness failing the

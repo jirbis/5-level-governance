@@ -71,6 +71,16 @@ if (( RUN_TESTS == 1 )); then
   esac
 fi
 
+# Approval verification only runs where the approvers can be established, which
+# is CI. Where it does run its failure is a blocker like any other; where it
+# does not, the row says so rather than implying a check that never happened.
+approval_out=""
+approval_state="unavailable"
+if [[ -n "${GOVERNANCE_APPROVERS_FILE:-}" ]]; then
+  approval_out="$(bash "$ROOT/scripts/verify_approval.sh" 2>&1)"
+  if (( $? == 0 )); then approval_state="pass"; else approval_state="fail"; fi
+fi
+
 fails="$(grep '^FAIL: ' <<<"$gate_out" || true)"
 pass_count="$(grep -c '^PASS: ' <<<"$gate_out" || true)"
 fail_count="$(grep -c '^FAIL: ' <<<"$gate_out" || true)"
@@ -86,7 +96,7 @@ base_line="$(grep -oE 'against [0-9a-f]{7,40}' <<<"$gate_out" | head -n1 | awk '
 scope_line="$(grep -E '^(PASS|FAIL): PATH scope: ' <<<"$gate_out" | head -n1)"
 
 overall="PASS"
-if (( gate_rc != 0 || tests_rc != 0 )); then
+if (( gate_rc != 0 || tests_rc != 0 )) || [[ "$approval_state" == "fail" ]]; then
   overall="FAIL"
 fi
 
@@ -109,6 +119,11 @@ if (( RUN_TESTS == 1 )); then
     printf '| Tests | ❌ FAIL |\n'
   fi
 fi
+case "$approval_state" in
+  pass) printf '| Approval · verified against the approving reviewer | ✅ PASS |\n' ;;
+  fail) printf '| Approval · verified against the approving reviewer | ❌ FAIL |\n' ;;
+  *)    printf '| Approval · verified against the approving reviewer | — not available outside CI |\n' ;;
+esac
 printf '\n'
 
 printf 'Active step `%s`' "${active_step:-unknown}"
@@ -117,11 +132,14 @@ if [[ -n "$base_line" ]]; then
 fi
 printf ' · %s passed, %s failed\n\n' "$pass_count" "$fail_count"
 
-if [[ -n "$fails" ]]; then
+if [[ -n "$fails" || "$approval_state" == "fail" ]]; then
   printf '### Blockers\n\n'
   while IFS= read -r line; do
     [[ -n "$line" ]] && printf -- '- %s\n' "${line#FAIL: }"
   done <<<"$fails"
+  if [[ "$approval_state" == "fail" ]]; then
+    printf -- '- %s\n' "$approval_out"
+  fi
   printf '\n'
 fi
 

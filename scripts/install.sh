@@ -252,10 +252,40 @@ jobs:
           fi
           echo "base=$base" >> "$GITHUB_OUTPUT"
 
+      - name: Collect approving reviewers
+        id: approvers
+        if: github.event_name == 'pull_request'
+        # No continue-on-error: if the query fails the job fails. A verifier
+        # whose input could not be established must never fall through to a pass.
+        uses: actions/github-script@v7
+        env:
+          APPROVERS_FILE: ${{ runner.temp }}/governance-approvers.txt
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              { owner, repo, pull_number: context.issue.number, per_page: 100 }
+            );
+            const latest = new Map();
+            for (const r of reviews) {
+              if (!r.user || !['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state)) {
+                continue;
+              }
+              latest.set(r.user.login, r.state);
+            }
+            const approvers = [...latest.entries()]
+              .filter(([, state]) => state === 'APPROVED')
+              .map(([login]) => login);
+            fs.writeFileSync(process.env.APPROVERS_FILE, approvers.join('\n') + '\n');
+            core.info(`approving reviewers: ${approvers.join(', ') || '(none)'}`);
+
       - name: Run gates and render report
         id: report
         env:
           GOVERNANCE_DIFF_BASE: ${{ steps.base.outputs.base }}
+          GOVERNANCE_APPROVERS_FILE: ${{ github.event_name == 'pull_request' && format('{0}/governance-approvers.txt', runner.temp) || '' }}
           # Outside the checkout: a report written into the workspace is an
           # untracked file the gates would correctly reject as out of scope.
           REPORT: ${{ runner.temp }}/governance-report.md

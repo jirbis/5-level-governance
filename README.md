@@ -281,8 +281,26 @@ A pre-existing entry does not justify a later amendment, the target and the
 approval must be in the same entry, and an `approved_by` that is empty, a
 placeholder or `TBD` is not an approval.
 
-**What this cannot do.** It verifies that an approval is *recorded*, not that it
-was *given* — nothing inside a file can prove who wrote it. Binding `approved_by`
-to a real identity needs signed commits or a reviewed pull request, which is a
-property of the repository rather than of the canon. It is tamper-evidence, not
-authentication.
+### Verified against the approving reviewer
+
+In CI the name is not taken on trust. `approved_by` must be the GitHub login of
+someone who submitted an approving review on the pull request, and the gate
+checks it against the reviews — a fact the repository holds and the author of
+the entry cannot write:
+
+```
+FAIL: approval: recorded approver did not approve this pull request —
+      decisions/2026-09-16-x.md names 'someone-else'; approving reviews came
+      from: jirbis
+```
+
+Only entries the change adds are verified. Entries already in the record are
+immutable and are never re-examined against a newer rule.
+
+It fails closed: an approver list that was never written means the query failed,
+which is not "nobody approved" and is never a pass.
+
+**What this still cannot do.** A change pushed straight to the default branch has
+no pull request and no reviews to verify against — that is branch protection's
+job, not the gate's. Outside CI, `make gate` establishes only that an approval is
+recorded.

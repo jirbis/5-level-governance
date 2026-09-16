@@ -19,9 +19,15 @@ this file records what changed the rules that govern the work.
 - `target_file`: the file whose rules changed
 - `change`: what changed, in one sentence
 - `evidence`: the TRACE entries or gate failures that motivated it
-- `approved_by`: who approved it
+- `approved_by`: the GitHub login of whoever approved it
 - `approved_at`: when
 ```
+
+Where CI can reach the pull request, `approved_by` must be the GitHub login of
+someone who submitted an approving review on the change carrying the entry: the
+gate checks the name against the reviews rather than accepting the string.
+Outside CI there is no pull request to check, so `make gate` establishes only
+that an approval is recorded.
 
 ## Decision Matrix
 - `LOCAL` — learning is specific to the current task flow. Target `PATH.md`.
@@ -44,6 +50,17 @@ Where a check can only read agent-authored prose, say so where it is defined.
 When a gate criterion exists in more than one runtime, pin the implementations
 to each other with a test that compares their output, not just their verdict.
 Two gates that word the same finding differently are already drifting.
+
+### An approval is verified against identity the author cannot write
+`approved_by` inside a file proves only that someone typed a name. Where the
+change arrives as a pull request, the name must match a GitHub account that
+actually submitted an approving review; the repository holds that fact and
+whoever wrote the entry cannot forge it.
+
+Only entries a change ADDS are verified. Entries already in the record were
+approved under whatever rule applied then, and they are immutable — rewriting a
+past entry to satisfy a newer rule is exactly what the append-only record exists
+to prevent.
 
 ### A check that cannot verify must fail, not pass
 When a check cannot perform its verification — a missing input, an unresolvable

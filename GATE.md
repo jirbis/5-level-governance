@@ -113,11 +113,25 @@ Only the artifact region is compared. The snapshot carries the generation date
 and HEAD, which move for reasons that are not drift; requiring them to be
 current would turn every commit into a stale-REALITY failure.
 
-**What this check cannot do.** It verifies that an approval is *recorded*, not
-that it was *given*. Nothing inside a file can prove who wrote it. Binding
-`approved_by` to a real identity requires signed commits or a reviewed pull
-request: a property of the repository, not of the canon. Treat the check as
-tamper-evidence, not authentication.
+### Approval Verification (Mechanical, CI only)
+Where the change arrives as a pull request, `approved_by` is checked against the
+GitHub accounts that submitted an approving review on it. The reviews are held
+by the repository and cannot be written by whoever wrote the entry, so the
+recorded approval becomes a verified one.
+
+- `approved_by` must be the approver's GitHub login. The `@` prefix and case are
+  tolerated.
+- Only entries the change ADDS are verified. Entries already in the record are
+  immutable and are never re-examined against a newer rule.
+- An approval later dismissed or replaced by a request for changes does not
+  count: the reviewer's latest state must be `APPROVED`.
+- It fails closed. An approver list that was never written means the query
+  failed, which is not the same as "nobody approved" and is never a pass.
+
+**What this still cannot do.** A change pushed directly to the default branch
+has no pull request and therefore no reviews to verify against. Closing that is
+branch protection's job, not the gate's. Outside CI the local gate establishes
+only that an approval is recorded — there is no pull request to check.
 
 ### On FAIL
 - Record FAIL in a new `trace/` entry.

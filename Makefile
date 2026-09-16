@@ -15,6 +15,7 @@ gate2:
 test:
 	bash ./scripts/test_path_scope.sh
 	bash ./scripts/test_install.sh
+	bash ./scripts/test_verify_approval.sh
 	bash ./scripts/test_decision_log.sh
 	bash ./scripts/test_gate_report.sh
 	bash ./scripts/test_reality_gen.sh

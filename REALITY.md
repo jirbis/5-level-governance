@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-16`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P64`
-- HEAD at generation: `774d124`
+- Active PATH step: `A6`
+- HEAD at generation: `6e5dbb6`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -23,6 +23,7 @@
 - `decisions/2026-09-15-declared-scope-is-a-precondition-of-admissibility.md`
 - `decisions/2026-09-15-records-become-directories.md`
 - `decisions/2026-09-15-the-record-of-rule-changes-becomes-an-enforced-artifact.md`
+- `decisions/2026-09-16-approvals-verified-against-reviewers.md`
 - `decisions/README.md`
 - `scripts/decision_log.sh`
 - `scripts/gate_enforce.sh`
@@ -41,6 +42,8 @@
 - `scripts/test_path_scope.sh`
 - `scripts/test_reality_gen.sh`
 - `scripts/test_shard_store.sh`
+- `scripts/test_verify_approval.sh`
+- `scripts/verify_approval.sh`
 - `trace/2026-02-18-add-gate-commands.md`
 - `trace/2026-02-18-fix-gate-script.md`
 - `trace/2026-02-18-init.md`
@@ -59,6 +62,7 @@
 - `trace/2026-09-15-shard-records.md`
 - `trace/2026-09-15-trace-append-only.md`
 - `trace/2026-09-16-absent-target-must-be-named.md`
+- `trace/2026-09-16-verified-approvals.md`
 - `trace/README.md`
 - `vscode-extension/.gitignore`
 - `vscode-extension/.vscodeignore`
@@ -82,6 +86,10 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- `approved_by` is verified against the GitHub accounts that approved the pull
+  request, so a recorded approval becomes a verified one. Only entries a change
+  adds are checked; the record stays immutable.
+
 - Third defect of one shape in `test_target_state`: a missing required include
   named a target other than `test`, so a project whose tests could not run at
   all reported green. Absence is now positively established — make must name
@@ -192,9 +200,10 @@
 - The `push` run on `main` diffs against the previous commit, so it assumes the
   merged `PATH.md` still describes the work that produced that commit. A stale
   PATH on `main` would show as a scope failure there.
-- The approval check verifies that an approval is recorded, not that it was
-  given. Binding `approved_by` to a real identity needs signed commits or a
-  reviewed pull request. It is tamper-evidence, not authentication.
+- A change pushed straight to the default branch has no pull request and so no
+  reviews to verify an approval against. Branch protection closes that, not the
+  gate. Where a pull request exists, `approved_by` is now verified against the
+  approving reviewer.
 - REALITY is still hand-maintained, so the artifact list can drift again. It
   should be generated from the tree rather than written.
 - Gate checks still do not consult the project's own test or build exit codes.
