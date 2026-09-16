@@ -49,9 +49,14 @@ run() {  # run <repo> [approvers_file]
   local d="$1" f="${2:-__UNSET__}" base
   base="$(git -C "$d" rev-list --max-parents=0 HEAD)"
   if [[ "$f" == "__UNSET__" ]]; then
-    ( cd "$d" && GOVERNANCE_ROOT="$d" bash scripts/verify_approval.sh "$base" 2>&1 )
+    # env -u, not just "do not set it": CI exports GOVERNANCE_APPROVERS_FILE for
+    # the step that runs this suite, and an inherited value would turn the case
+    # that matters most - a verifier with no way to verify - into a pass.
+    ( cd "$d" && env -u GOVERNANCE_APPROVERS_FILE GOVERNANCE_ROOT="$d" \
+        bash scripts/verify_approval.sh "$base" 2>&1 )
   else
-    ( cd "$d" && GOVERNANCE_ROOT="$d" GOVERNANCE_APPROVERS_FILE="$f" bash scripts/verify_approval.sh "$base" 2>&1 )
+    ( cd "$d" && GOVERNANCE_ROOT="$d" GOVERNANCE_APPROVERS_FILE="$f" \
+        bash scripts/verify_approval.sh "$base" 2>&1 )
   fi
 }
 

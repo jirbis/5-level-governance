@@ -39,6 +39,19 @@ done
 [[ -n "$(find "$d/trace" -name '*-init.md')" ]] && ok "seeds a first trace entry" || no "no seeded trace entry"
 [[ -f "$d/scripts/test_install.sh" ]] && no "installed the governance test suite into the project" || ok "does not install the test suite"
 
+# The installed runtime must be self-contained. gate_report.sh once called a
+# script the installer did not ship: locally the call was skipped because its
+# trigger env var was unset, so only CI saw it. Assert the closure instead of
+# trusting a hand-maintained list.
+missing=""
+for script in "$d"/scripts/*.sh; do
+  while IFS= read -r ref; do
+    [[ -f "$d/scripts/$ref" ]] || missing+=" $(basename "$script")→$ref"
+  done < <(grep -oE '\$ROOT/scripts/[a-z_]+\.sh' "$script" | sed 's|.*/||' | sort -u)
+done
+[[ -z "$missing" ]] && ok "every script the installed runtime calls is installed" \
+  || no "installed runtime is incomplete:$missing"
+
 echo
 echo "== it does not clobber the project =="
 grep -q '# My Project' "$d/README.md" && ok "leaves an existing README alone" || no "overwrote README.md"
@@ -150,6 +163,49 @@ printf 'include governance.mk\n\n.PHONY: test\ntest:\n\t@echo "  ok   stub"\n' >
 rep="$(GOVERNANCE_DIFF_BASE=HEAD bash "$d/scripts/gate_report.sh" 2>&1)"
 grep -q '| Tests | ✅ PASS |' <<<"$rep" && ok "a working test target is run and reported" || no "working target not run"
 rm -rf "$d"
+
+echo
+echo "== the installed runtime verifies approvals when CI supplies the reviewers =="
+# Set the trigger explicitly rather than relying on CI's environment leaking in:
+# that inheritance is the only reason the missing-script bug ever surfaced, and
+# a suite that depends on it tests nothing locally.
+d="$(new_project)"
+bash "$ROOT/scripts/install.sh" "$d" >/dev/null 2>&1
+sed -i 's/`<set workspace root>`/`proj`/; s/`<set concrete goal>`/`g`/; s/`<set explicit exclusions>`/`n`/' "$d/PATH.md"
+sed -i 's|allowed_paths: <set the files this step may touch>|allowed_paths: src/**, LAW.md, decisions/**|' "$d/PATH.md"
+printf 'include governance.mk\n' > "$d/Makefile"
+git -C "$d" add -A >/dev/null; git -C "$d" commit -qm governance
+
+approvers="$(mktemp)"; printf 'a-reviewer\n' > "$approvers"
+rep="$(cd "$d" && GOVERNANCE_DIFF_BASE=HEAD GOVERNANCE_APPROVERS_FILE="$approvers" bash scripts/gate_report.sh 2>&1)"
+grep -q '| Approval · verified against the approving reviewer | ✅ PASS |' <<<"$rep" \
+  && ok "an unchanged LAW.md leaves the approval row passing" \
+  || no "approval row wrong: $(grep -m1 'Approval' <<<"$rep")"
+
+# Amend LAW with an entry naming someone who did not approve.
+printf -- '- a rule added without approval.\n' >> "$d/LAW.md"
+cat > "$d/decisions/2026-02-02-x.md" <<'E'
+### D9 — 2026-02-02 — unapproved
+- `target_file`: `LAW.md`
+- `approved_by`: someone-else
+E
+rep="$(cd "$d" && GOVERNANCE_DIFF_BASE=HEAD GOVERNANCE_APPROVERS_FILE="$approvers" bash scripts/gate_report.sh 2>&1)"
+grep -q '| Approval · verified against the approving reviewer | ❌ FAIL |' <<<"$rep" \
+  && ok "an approver who did not approve fails the installed report" \
+  || no "should fail: $(grep -m1 'Approval' <<<"$rep")"
+grep -q 'did not approve this pull request' <<<"$rep" && ok "the blocker names the problem" || no "blocker not explained"
+
+# Name the real approver instead.
+sed -i 's/someone-else/a-reviewer/' "$d/decisions/2026-02-02-x.md"
+rep="$(cd "$d" && GOVERNANCE_DIFF_BASE=HEAD GOVERNANCE_APPROVERS_FILE="$approvers" bash scripts/gate_report.sh 2>&1)"
+grep -q '| Approval · verified against the approving reviewer | ✅ PASS |' <<<"$rep" \
+  && ok "naming the real approver passes" || no "should pass: $(grep -m1 'Approval' <<<"$rep")"
+
+# And with no approver list at all, it must fail rather than skip.
+rep="$(cd "$d" && GOVERNANCE_DIFF_BASE=HEAD GOVERNANCE_APPROVERS_FILE=/nonexistent bash scripts/gate_report.sh 2>&1)"
+grep -q '| Approval · verified against the approving reviewer | ❌ FAIL |' <<<"$rep" \
+  && ok "an unavailable approver list fails the installed report" || no "must fail closed"
+rm -f "$approvers"; rm -rf "$d"
 
 echo
 echo "== it refuses to install into itself =="

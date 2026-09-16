@@ -86,7 +86,8 @@ echo
 echo "Runtime:"
 # Only the runtime gate; the test suite belongs to the governance repository.
 for f in gate_enforce.sh path_scope.sh decision_log.sh reality_gen.sh \
-         reality_update.sh shard_store.sh shard_migrate.sh gate_report.sh; do
+         reality_update.sh shard_store.sh shard_migrate.sh gate_report.sh \
+         verify_approval.sh; do
   copy "scripts/$f"
   chmod +x "$DEST/scripts/$f" 2>/dev/null || true
 done

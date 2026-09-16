@@ -39,9 +39,11 @@ against these patterns, so an undeclared scope admits no change.
       allowed_paths: decisions/**, GATE.md, README.md, PATH.md
 - [x] `A6` Update REALITY, add a trace entry, run Gate 2.
       allowed_paths: PATH.md, trace/**, REALITY.md
+- [x] `A7` Ship the approval verifier with the installed runtime, and assert the installed runtime is complete.
+      allowed_paths: scripts/**, PATH.md, trace/**, REALITY.md
 
 ## Current Pointer
-- `active_step`: `A6`
+- `active_step`: `A7`
 
 ## Blocking Questions
 - (none)

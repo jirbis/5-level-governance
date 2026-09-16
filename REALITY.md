@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-16`
 - Workspace root: `5-level-governance`
-- Active PATH step: `A6`
-- HEAD at generation: `6e5dbb6`
+- Active PATH step: `A7`
+- HEAD at generation: `c4f5faf`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -62,6 +62,7 @@
 - `trace/2026-09-15-shard-records.md`
 - `trace/2026-09-15-trace-append-only.md`
 - `trace/2026-09-16-absent-target-must-be-named.md`
+- `trace/2026-09-16-installed-runtime-incomplete.md`
 - `trace/2026-09-16-verified-approvals.md`
 - `trace/README.md`
 - `vscode-extension/.gitignore`
@@ -86,6 +87,11 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- The installer did not ship `verify_approval.sh` although the report it ships
+  calls it. Local runs never exercised the call, CI did. Fixed, and the class is
+  now closed by a check that every script the installed runtime references is
+  installed.
+
 - `approved_by` is verified against the GitHub accounts that approved the pull
   request, so a recorded approval becomes a verified one. Only entries a change
   adds are checked; the record stays immutable.
