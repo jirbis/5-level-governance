@@ -2,6 +2,11 @@ name: Governance Gate
 
 on:
   pull_request:
+  # An approval submitted, edited or dismissed changes the verdict, and no
+  # other event fires when it happens: without this the job that checks
+  # approvals simply never reruns.
+  pull_request_review:
+    types: [submitted, edited, dismissed]
   push:
     branches: [main]
   workflow_dispatch:
@@ -16,6 +21,8 @@ concurrency:
 
 jobs:
   gate:
+    # Skipped on review events: nothing in the tree changed, only the approvals.
+    if: github.event_name != 'pull_request_review'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -113,3 +120,68 @@ jobs:
             exit 1
           fi
           echo "Governance gate passed."
+
+  # Deliberately separate from `gate`, and deliberately minimal. `gate` runs the
+  # project's own `make test`, which is code from the branch under review; a
+  # recipe there can write any file the job can reach, including the approver
+  # list. This job installs nothing, builds nothing and runs no project target,
+  # so no code from the pull request executes before the verdict is computed.
+  #
+  # It is still not a barrier against a hostile author: on a `pull_request`
+  # event the workflow and the verifier both come from the branch under review.
+  # Making approval mandatory is GitHub's job - see GATE.md.
+  approval:
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the head under review
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Resolve diff base
+        id: base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          echo "base=$(git merge-base "origin/$BASE_REF" HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Collect reviewers who approved THIS head
+        uses: actions/github-script@v7
+        env:
+          APPROVERS_FILE: ${{ runner.temp }}/governance-approvers.txt
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+            const head = process.env.HEAD_SHA;
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              { owner, repo, pull_number: number, per_page: 100 }
+            );
+            // An approval is of a commit, not of a pull request. Accepting an
+            // approval of an earlier commit would let an author add a decision
+            // after the reviewer looked, and have it count.
+            const latest = new Map();
+            for (const r of reviews) {
+              if (!r.user) continue;
+              if (!['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state)) continue;
+              latest.set(r.user.login, r);
+            }
+            const approvers = [...latest.values()]
+              .filter((r) => r.state === 'APPROVED' && r.commit_id === head)
+              .map((r) => r.user.login);
+            fs.writeFileSync(process.env.APPROVERS_FILE, approvers.join('\n') + '\n');
+            core.info(`head ${head}`);
+            core.info(`approving reviews of this head: ${approvers.join(', ') || '(none)'}`);
+
+      - name: Verify recorded approvals
+        env:
+          GOVERNANCE_DIFF_BASE: ${{ steps.base.outputs.base }}
+          GOVERNANCE_APPROVERS_FILE: ${{ runner.temp }}/governance-approvers.txt
+        run: bash ./scripts/verify_approval.sh

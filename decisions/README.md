@@ -19,9 +19,16 @@ this file records what changed the rules that govern the work.
 - `target_file`: the file whose rules changed
 - `change`: what changed, in one sentence
 - `evidence`: the TRACE entries or gate failures that motivated it
-- `approved_by`: who approved it
+- `approved_by`: the GitHub login of whoever approved it
 - `approved_at`: when
 ```
+
+Where CI can reach the pull request, `approved_by` must be the GitHub login of
+someone who approved that exact head: the check compares the name against the
+reviews rather than accepting the string, and every newly added entry is
+checked, not only those accompanying a `LAW.md` change. Outside CI there is no
+pull request to check, so `make gate` establishes only that an approval is
+recorded.
 
 ## Decision Matrix
 - `LOCAL` — learning is specific to the current task flow. Target `PATH.md`.
@@ -44,6 +51,22 @@ Where a check can only read agent-authored prose, say so where it is defined.
 When a gate criterion exists in more than one runtime, pin the implementations
 to each other with a test that compares their output, not just their verdict.
 Two gates that word the same finding differently are already drifting.
+
+### An approval is checked against the reviews, and required by the platform
+`approved_by` inside a file proves only that someone typed a name. Where the
+change arrives as a pull request, the name must match a GitHub account that
+submitted an approving review of that exact head, and CI checks it.
+
+That check SURFACES a mismatch. It does not make approval mandatory, and it is
+not a barrier against a hostile author: the workflow and the verifier are both
+content of the branch under review, so whoever writes an entry can rewrite its
+checker. Requiring approval is the platform's job — branch protection or a
+ruleset with required reviews and dismissal of stale approvals.
+
+Only entries a change ADDS are verified. Entries already in the record were
+approved under whatever rule applied then, and they are immutable — rewriting a
+past entry to satisfy a newer rule is exactly what the append-only record exists
+to prevent.
 
 ### A check that cannot verify must fail, not pass
 When a check cannot perform its verification — a missing input, an unresolvable

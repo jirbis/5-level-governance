@@ -4,8 +4,8 @@
 ## Current State Snapshot
 - Generated: `2026-09-16`
 - Workspace root: `5-level-governance`
-- Active PATH step: `P64`
-- HEAD at generation: `774d124`
+- Active PATH step: `A13`
+- HEAD at generation: `7c56218`
 - Working tree at generation: `dirty`
 <!-- /generated:snapshot -->
 <!-- generated:artifacts -->
@@ -23,6 +23,8 @@
 - `decisions/2026-09-15-declared-scope-is-a-precondition-of-admissibility.md`
 - `decisions/2026-09-15-records-become-directories.md`
 - `decisions/2026-09-15-the-record-of-rule-changes-becomes-an-enforced-artifact.md`
+- `decisions/2026-09-16-approval-check-surfaces-mismatch.md`
+- `decisions/2026-09-16-approvals-verified-against-reviewers.md`
 - `decisions/README.md`
 - `scripts/decision_log.sh`
 - `scripts/gate_enforce.sh`
@@ -41,6 +43,8 @@
 - `scripts/test_path_scope.sh`
 - `scripts/test_reality_gen.sh`
 - `scripts/test_shard_store.sh`
+- `scripts/test_verify_approval.sh`
+- `scripts/verify_approval.sh`
 - `trace/2026-02-18-add-gate-commands.md`
 - `trace/2026-02-18-fix-gate-script.md`
 - `trace/2026-02-18-init.md`
@@ -59,6 +63,9 @@
 - `trace/2026-09-15-shard-records.md`
 - `trace/2026-09-15-trace-append-only.md`
 - `trace/2026-09-16-absent-target-must-be-named.md`
+- `trace/2026-09-16-approval-trust-boundary.md`
+- `trace/2026-09-16-installed-runtime-incomplete.md`
+- `trace/2026-09-16-verified-approvals.md`
 - `trace/README.md`
 - `vscode-extension/.gitignore`
 - `vscode-extension/.vscodeignore`
@@ -82,6 +89,23 @@
 - `vscode-extension/tsconfig.json`
 <!-- /generated:artifacts -->
 ## Deltas This Run
+- Four review findings fixed. The approval check ran after the project own
+  tests, which could write the approver list it was judged by; it now runs in a
+  job that executes no code from the change, counts only approvals of the exact
+  head, reruns on review events, and covers every added entry rather than only
+  those touching LAW.md.
+- D6 corrects D5: the check surfaces mismatch, the platform makes approval
+  mandatory.
+
+- The installer did not ship `verify_approval.sh` although the report it ships
+  calls it. Local runs never exercised the call, CI did. Fixed, and the class is
+  now closed by a check that every script the installed runtime references is
+  installed.
+
+- `approved_by` is verified against the GitHub accounts that approved the pull
+  request, so a recorded approval becomes a verified one. Only entries a change
+  adds are checked; the record stays immutable.
+
 - Third defect of one shape in `test_target_state`: a missing required include
   named a target other than `test`, so a project whose tests could not run at
   all reported green. Absence is now positively established — make must name
@@ -192,9 +216,11 @@
 - The `push` run on `main` diffs against the previous commit, so it assumes the
   merged `PATH.md` still describes the work that produced that commit. A stale
   PATH on `main` would show as a scope failure there.
-- The approval check verifies that an approval is recorded, not that it was
-  given. Binding `approved_by` to a real identity needs signed commits or a
-  reviewed pull request. It is tamper-evidence, not authentication.
+- The approval check surfaces a mismatch; it does not make approval mandatory.
+  The workflow and the verifier are content of the branch under review, so a
+  hostile author can rewrite the checker. Required reviews, dismissal of stale
+  approvals and a required check are GitHub settings, named in `GATE.md`, and
+  are not configured on this repository yet.
 - REALITY is still hand-maintained, so the artifact list can drift again. It
   should be generated from the tree rather than written.
 - Gate checks still do not consult the project's own test or build exit codes.

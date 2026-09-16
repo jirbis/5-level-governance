@@ -39,6 +39,19 @@ done
 [[ -n "$(find "$d/trace" -name '*-init.md')" ]] && ok "seeds a first trace entry" || no "no seeded trace entry"
 [[ -f "$d/scripts/test_install.sh" ]] && no "installed the governance test suite into the project" || ok "does not install the test suite"
 
+# The installed runtime must be self-contained. gate_report.sh once called a
+# script the installer did not ship: locally the call was skipped because its
+# trigger env var was unset, so only CI saw it. Assert the closure instead of
+# trusting a hand-maintained list.
+missing=""
+for script in "$d"/scripts/*.sh; do
+  while IFS= read -r ref; do
+    [[ -f "$d/scripts/$ref" ]] || missing+=" $(basename "$script")→$ref"
+  done < <(grep -oE '\$ROOT/scripts/[a-z_]+\.sh' "$script" | sed 's|.*/||' | sort -u)
+done
+[[ -z "$missing" ]] && ok "every script the installed runtime calls is installed" \
+  || no "installed runtime is incomplete:$missing"
+
 echo
 echo "== it does not clobber the project =="
 grep -q '# My Project' "$d/README.md" && ok "leaves an existing README alone" || no "overwrote README.md"
@@ -152,6 +165,40 @@ grep -q '| Tests | ✅ PASS |' <<<"$rep" && ok "a working test target is run and
 rm -rf "$d"
 
 echo
+echo "== the report never touches the approver list =="
+# The exploit this replaced: gate_report.sh ran the project's `make test` and
+# then read GOVERNANCE_APPROVERS_FILE, so a test recipe could write its own
+# approval evidence. The report must not reference that path at all.
+grep -q 'GOVERNANCE_APPROVERS_FILE\|verify_approval' "$ROOT/scripts/gate_report.sh" \
+  && no "gate_report.sh still reaches for the approver list" \
+  || ok "gate_report.sh does not reference the approver list"
+
+d="$(new_project)"
+bash "$ROOT/scripts/install.sh" "$d" --with-ci >/dev/null 2>&1
+wf="$d/.github/workflows/governance-gate.yml"
+python3 - "$wf" <<'PYW'
+import sys, yaml
+w = yaml.safe_load(open(sys.argv[1]))
+jobs = w["jobs"]
+assert "approval" in jobs, "no isolated approval job"
+gate = yaml.dump(jobs["gate"])
+assert "APPROVERS" not in gate, "the test-running job can see the approver list"
+appr = yaml.dump(jobs["approval"])
+for forbidden in ("npm", "make test", "gate_report"):
+    assert forbidden not in appr, f"approval job runs project code: {forbidden}"
+assert "commit_id === head" in appr, "approval is not bound to the head"
+triggers = w[True] if True in w else w["on"]
+assert "pull_request_review" in triggers, "review events do not retrigger"
+PYW
+if [[ $? -eq 0 ]]; then
+  ok "the installed workflow verifies approvals in a job that runs no project code"
+  ok "the installed workflow binds an approval to the head it approved"
+  ok "the installed workflow reruns when a review changes"
+else
+  no "installed workflow does not isolate approval verification"
+fi
+rm -rf "$d"
+
 echo "== it refuses to install into itself =="
 if bash "$ROOT/scripts/install.sh" "$ROOT" >/dev/null 2>&1; then
   no "installing into the governance repository should be refused"
